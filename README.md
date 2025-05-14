@@ -1,6 +1,8 @@
 # D4keyHelp
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-D4KeyHelp是一个有图形界面，可自定义配置的暗黑4鼠标宏工具。修改自@https://github.com/duzefu/D4keyHelp
+D4KeyHelp是一个有图形界面，可自定义配置的暗黑4鼠标宏工具。
+
+修改自@https://github.com/duzefu/D4keyHelp
 
 
 运行代码请使用最新版的AHK v2.0软件!并非常见的V1.3的版本,你也可以直接在release处下载.exe而不安装AHK.
