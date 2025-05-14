@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 #SingleInstance Force
 ProcessSetPriority "High"
 
@@ -415,7 +415,7 @@ StartAllTimers() {
 
     ; 启动鼠标自动移动定时器
     StartMouseAutoMoveTimer()
- 
+  
     DebugLog("所有定时器已启动")
 }
 
@@ -515,9 +515,6 @@ StopAllTimers() {
     SetTimer PressForceMove, 0
     SetTimer MoveMouseToNextPoint, 0
 
-    ; 重置所有按住模式的按键状态
-    ResetAllHoldKeyStates()
-
     ; 重置鼠标按键状态
     ResetMouseButtonStates()
 
@@ -534,9 +531,8 @@ StopAllTimers() {
  * @param {String} mouseBtn - 鼠标按钮名（如"left"/"right"，仅type为mouse时用）
  */
 HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
+    global holdStates := Map()
     global shiftEnabled, buffThreshold
-
-    static holdStates := Map()
 
     if (mode == SKILL_MODE_BUFF) {
         ; BUFF模式
@@ -988,7 +984,7 @@ ToggleMacro(*) {
  * 释放所有可能被按住的按键
  */
 ReleaseAllKeys() {
-    global skillControls
+    global skillControls, holdStates
 
     ; 释放修饰键
     Send "{Shift up}"
@@ -1009,8 +1005,7 @@ ReleaseAllKeys() {
     Click "up left"
     Click "up right"
 
-    ; 重置所有按住模式的按键状态
-    ResetAllHoldKeyStates()
+    holdStates.Clear() ; 清空所有按住状态
 
     ; 重置鼠标按键状态
     ResetMouseButtonStates()
@@ -1018,17 +1013,6 @@ ReleaseAllKeys() {
     DebugLog("已释放所有按键")
 }
 
-/**
- * 重置所有按住模式的按键状态
- */
-ResetAllHoldKeyStates() {
-    ; 使用全局静态变量来跟踪按键状态
-    static keyStates := Map()
-
-    ; 清空按键状态映射
-    keyStates := Map()
-    DebugLog("重置所有按住模式的按键状态")
-}
 
 /**
  * 切换Shift键状态
@@ -1367,4 +1351,3 @@ MoveMouseToNextPoint() {
         DebugLog("鼠标自动移动失败: " err.Message)
     }
 }
-
