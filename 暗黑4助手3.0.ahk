@@ -7,8 +7,7 @@ ProcessSetPriority "High"
 global DEBUG := false              ; 是否启用调试模式
 global debugLogFile := A_ScriptDir "\debugd4.log"
 global isRunning := false          ; 宏是否运行中
-global isPaused := false           ; 宏是否暂停
-global previouslyPaused := false   ; 记录之前的暂停状态
+global pauseStack := []            ; 暂停原因栈，支持多重嵌套
 global counter := 0
 global currentHotkey := "F1"       ; 当前热键
 
@@ -96,7 +95,7 @@ CreateMainGUI() {
 
     ; 添加主要内容区域
     myGui.AddGroupBox("x10 y10 w460 h120", "F3: 卡快照")
-    statusText := myGui.AddText("x30 y35 w200 h20", "状态: 未运行")
+    statusText := myGui.AddText("x30 y35 w400 h20", "状态: 未运行")
     myGui.AddButton("x30 y65 w80 h30", "开始/停止").OnEvent("Click", ToggleMacro)
     myGui.AddText("x30 y100 w300 h20", "提示：仅在暗黑破坏神4窗口活动时生效")
  
@@ -251,7 +250,6 @@ InitializeGUI() {
     ))
 
     ; 设置窗口事件处理
-    myGui.OnEvent("Close", (*) => ExitApp())
     myGui.OnEvent("Escape", (*) => ExitApp())
 }
 
@@ -287,10 +285,20 @@ ValidateSleepInput(ctrl, *) {
  * @param {String} barText - 状态栏文本
  */
 UpdateStatus(status, barText) {
-    global statusText, statusBar
-    statusText.Value := "状态: " status
-    statusBar.Text := barText
-    DebugLog("状态更新: " status " | " barText)
+    global statusText, statusBar, pauseStack
+    ; 如果有暂停，显示所有暂停原因
+    if (pauseStack.Length > 0) {
+        reasons := ""
+        for i, reason in pauseStack
+            reasons .= (i > 1 ? "，" : "") . reason
+        statusText.Value := "状态: 已暂停(" reasons ")"
+        statusBar.Text := "宏已暂停 - " reasons
+        DebugLog("状态更新: 已暂停(" reasons ") | " barText)
+    } else {
+        statusText.Value := "状态: " status
+        statusBar.Text := barText
+        DebugLog("状态更新: " status " | " barText)
+    }
 }
 
 ; ==================== 核心控制函数 ====================
@@ -298,12 +306,12 @@ UpdateStatus(status, barText) {
  * 切换宏运行状态
  */
 ToggleMacro(*) {
-    global isRunning, isPaused, previouslyPaused, mouseAutoMoveEnabled, mouseAutoMove
+    global isRunning, mouseAutoMoveEnabled, mouseAutoMove, pauseStack
 
     ; 确保完全停止所有定时器
     StopAllTimers()
-    StopImagePauseTimer() ; 停止识图定时器
-    StopWindowCheckTimer() ; 停止窗口检测定时器
+    StopImagePauseTimer()
+    StopWindowCheckTimer()
     ; 切换运行状态
     isRunning := !isRunning
 
@@ -311,8 +319,7 @@ ToggleMacro(*) {
         ; 初始化窗口分辨率和技能位置
         GetDynamicSkillPositions()
         ; 重置暂停状态
-        isPaused := false
-        previouslyPaused := false
+        pauseStack := []
 
         ; 确保鼠标自动移动状态与GUI勾选框一致
         mouseAutoMoveEnabled := (mouseAutoMove.enable.Value = 1)
@@ -320,17 +327,18 @@ ToggleMacro(*) {
         ; 只有在暗黑4窗口激活时才启动定时器
         if WinActive("ahk_class Diablo IV Main Window Class") {
             StartAllTimers()
-            StartImagePauseTimer() ; 启动识图定时器
-            StartWindowCheckTimer() ; 启动窗口检测定时器
+            ; 启动自动识图定时器
+            StartImagePauseTimer()
+            ; 启动窗口检测定时器
+            StartWindowCheckTimer()
             UpdateStatus("运行中", "宏已启动")
         } else {
-            isPaused := true
+            PushPause("窗口切换")
             UpdateStatus("已暂停(窗口切换)", "宏已暂停 - 窗口未激活")
         }
     } else {
         ; 确保重置所有状态
-        isPaused := false
-        previouslyPaused := false
+        pauseStack := []
         UpdateStatus("已停止", "宏已停止")
 
         ; 确保释放所有按键
@@ -344,7 +352,7 @@ ToggleMacro(*) {
  * 释放所有可能被按住的按键
  */
 ReleaseAllKeys() {
-    global skillControls, holdStates
+    global skillControls, uCtrl, holdStates
 
     ; 释放修饰键
     Send "{Shift up}"
@@ -360,16 +368,39 @@ ReleaseAllKeys() {
         }
     }
 
-    ; 释放鼠标按键
+    ; 释放功能键
+    if (uCtrl.potion.key.Value != "") {
+        Send "{" uCtrl.potion.key.Value " up}"
+        DebugLog("释放喝药键: " uCtrl.potion.key.Value)
+    }
+    
+    if (uCtrl.forceMove.key.Value != "") {
+        Send "{" uCtrl.forceMove.key.Value " up}"
+        DebugLog("释放强制移动键: " uCtrl.forceMove.key.Value)
+    }
+    
+    ; 释放空格键
+    Send "{Space up}"
+    DebugLog("释放空格键")
+
+    ; 释放法师技能键
+    for skillName in ["huoDun", "dianMao", "dianQiu", "binDun"] {
+        if (uCtrl.HasProp(skillName) && uCtrl.%skillName%.key.Value != "") {
+            key := uCtrl.%skillName%.key.Value
+            Send "{" key " up}"
+            DebugLog("释放" skillName "键: " key)
+        }
+    }
+
+    ; 释放鼠标按键 (只需要一次)
     SetMouseDelay -1
     Click "up left"
     Click "up right"
+    DebugLog("释放鼠标左右键")
 
-    holdStates.Clear() ; 清空所有按住状态
-
-    ; 重置鼠标按键状态
-    ResetMouseButtonStates()
-
+    ; 清空所有按住状态跟踪
+    holdStates.Clear() 
+    
     DebugLog("已释放所有按键")
 }
 
@@ -377,14 +408,9 @@ ReleaseAllKeys() {
  * 自动恢复暂停的功能
  */
 ResumeAfterPause() {
-    global isRunning, isPaused  ; 这个函数中也需要声明全局变量
-    
-    if (isRunning && isPaused) {
-        isPaused := false
-        StartAllTimers()
-        UpdateStatus("运行中", "宏已自动恢复 - 双击暂停结束")
-        DebugLog("双击暂停2秒后自动恢复")
-    }
+    ; 只弹出“鼠标双击”暂停
+    PopPause("鼠标双击")
+    DebugLog("双击暂停2秒后自动恢复")
 }
 
 ; ==================== 定时器管理 ====================
@@ -478,24 +504,26 @@ StartSingleTimer(name, control, timerFunc) {
  * 停止所有定时器
  */
 StopAllTimers() {
-    global boundSkillTimers, skillControls
+    global boundSkillTimers, timerStates
     
     ; 停止技能定时器
     for i, timerFunc in boundSkillTimers {
         SetTimer(timerFunc, 0)
+        timerStates.Delete(i)  ; 更新技能定时器状态
     }
     boundSkillTimers.Clear()
 
-    ; 停止所有定时器
-    SetTimer PressLeftClick, 0
-    SetTimer PressRightClick, 0
-    SetTimer PressDodge, 0
-    SetTimer PressPotion, 0
-    SetTimer PressForceMove, 0
+    ; 停止所有定时器并更新状态
+    SetTimer PressLeftClick, 0  
+    SetTimer PressRightClick, 0   
+    SetTimer PressDodge, 0   
+    SetTimer PressPotion, 0   
+    SetTimer PressForceMove, 0  
     SetTimer MoveMouseToNextPoint, 0
-    
-    ; 重置鼠标按键状态
-    ResetMouseButtonStates()
+    ; 清空所有定时器状态
+    timerStates.Clear()
+    ; 释放所有按键
+    ReleaseAllKeys()
 
     DebugLog("已停止所有定时器并释放按键")
 }
@@ -610,8 +638,8 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", descript
  * 技能按键处理
  */
 PressSkill(skillNum) {
-    global isRunning, isPaused, skillControls, skillPositions
-    if (!isRunning || isPaused || !skillControls[skillNum].enable.Value)
+    global isRunning, skillControls, skillPositions
+    if (!isRunning || IsPaused() || !skillControls[skillNum].enable.Value)
         return
     key := skillControls[skillNum].key.Value
     if (key = "")
@@ -625,8 +653,8 @@ PressSkill(skillNum) {
  * 鼠标左键处理
  */
 PressLeftClick() {
-    global isRunning, isPaused, mouseControls, skillPositions
-    if (!isRunning || isPaused || !mouseControls.left.enable.Value)
+    global isRunning, mouseControls, skillPositions
+    if (!isRunning || IsPaused() || !mouseControls.left.enable.Value)
         return
     mode := mouseControls.left.mode.Value
     pos := skillPositions.Has("left") ? skillPositions["left"] : ""
@@ -637,8 +665,8 @@ PressLeftClick() {
  * 鼠标右键处理
  */
 PressRightClick() {
-    global isRunning, isPaused, mouseControls, skillPositions
-    if (!isRunning || isPaused || !mouseControls.right.enable.Value)
+    global isRunning, mouseControls, skillPositions
+    if (!isRunning || IsPaused() || !mouseControls.right.enable.Value)
         return
     mode := mouseControls.right.mode.Value
     pos := skillPositions.Has("right") ? skillPositions["right"] : ""
@@ -649,25 +677,25 @@ PressRightClick() {
  * 按下空格键(空格)
  */
 PressDodge() {
-    global isRunning, isPaused, uCtrl
-    
-    if (isRunning && !isPaused && uCtrl.dodge.enable.Value = 1) {
-        ; 空格键总是使用连点模式
-        HandleKeyMode("Space", SKILL_MODE_CLICK, "", "key", "", "空格键")
-    }
+    global isRunning, uCtrl
+
+    if (!isRunning || IsPaused() || uCtrl.dodge.enable.Value != 1)
+        return
+    ; 空格键总是使用连点模式
+    HandleKeyMode("Space", SKILL_MODE_CLICK, "", "key", "", "空格键")
 }
 
 /**
  * 按下喝药键
  */
 PressPotion() {
-    global isRunning, isPaused, uCtrl
+    global isRunning, uCtrl
     
-    if (isRunning && !isPaused && uCtrl.potion.enable.Value = 1) {
-        key := uCtrl.potion.key.Value
-        if (key != "") {
-            HandleKeyMode(key, SKILL_MODE_CLICK, "", "key", "", "喝药键")
-        }
+    if (!isRunning || IsPaused() || uCtrl.potion.enable.Value != 1)
+        return
+    key := uCtrl.potion.key.Value
+    if (key != "") {
+        HandleKeyMode(key, SKILL_MODE_CLICK, "", "key", "", "喝药键")
     }
 }
 
@@ -675,13 +703,13 @@ PressPotion() {
  * 按下强制移动键
  */
 PressForceMove() {
-    global isRunning, isPaused, uCtrl
-    
-    if (isRunning && !isPaused && uCtrl.forceMove.enable.Value = 1) {
-        key := uCtrl.forceMove.key.Value
-        if (key != "") {
-            HandleKeyMode(key, SKILL_MODE_CLICK, "", "key", "", "强制移动键")
-        }
+    global isRunning, uCtrl
+
+    if (!isRunning || IsPaused() || uCtrl.forceMove.enable.Value != 1)
+        return
+    key := uCtrl.forceMove.key.Value
+    if (key != "") {
+        HandleKeyMode(key, SKILL_MODE_CLICK, "", "key", "", "强制移动键")
     }
 }
 
@@ -703,26 +731,6 @@ SendWithShift(key) {
 }
 
 /**
- * 重置鼠标按键状态
- */
-ResetMouseButtonStates() {
-    static leftMouseHeld := false
-    static rightMouseHeld := false
-
-    if (leftMouseHeld) {
-        Click "up left"
-        leftMouseHeld := false
-        DebugLog("释放鼠标左键")
-    }
-
-    if (rightMouseHeld) {
-        Click "up right"
-        rightMouseHeld := false
-        DebugLog("释放鼠标右键")
-    }
-}
-
-/**
  * 切换Shift键状态
  */
 ToggleShift(*) {
@@ -735,9 +743,9 @@ ToggleShift(*) {
  * 鼠标自动移动函数
  */
 MoveMouseToNextPoint() {
-    global mouseAutoMoveCurrentPoint, isRunning, isPaused, mouseAutoMoveEnabled
+    global mouseAutoMoveCurrentPoint, isRunning, mouseAutoMoveEnabled
 
-    if (!isRunning || isPaused || !mouseAutoMoveEnabled)
+    if (!isRunning || IsPaused() || !mouseAutoMoveEnabled)
         return
 
     try {
@@ -771,15 +779,15 @@ MoveMouseToNextPoint() {
  * 切换鼠标自动移动功能
  */
 ToggleMouseAutoMove(*) {
-    global mouseAutoMoveEnabled, mouseAutoMove, isRunning, isPaused, timerStates
+    global mouseAutoMoveEnabled, mouseAutoMove, isRunning, timerStates
 
     mouseAutoMoveEnabled := !mouseAutoMoveEnabled
 
     ; 更新GUI勾选框状态以匹配当前状态
     mouseAutoMove.enable.Value := mouseAutoMoveEnabled ? 1 : 0
 
-    ; 如果宏已经在运行，则更新定时器状态
-    if (isRunning && !isPaused) {
+    ; 如果宏已经在运行且未暂停，则更新定时器状态
+    if (isRunning && !IsPaused()) {
         if (mouseAutoMoveEnabled) {
             interval := Integer(mouseAutoMove.interval.Value)
             if (interval > 0) {
@@ -797,6 +805,55 @@ ToggleMouseAutoMove(*) {
     DebugLog("鼠标自动移动状态切换: " . (mouseAutoMoveEnabled ? "启用" : "禁用"))
 }
 
+; ==================== 暂停/恢复核心函数 ====================
+/**
+ * 暂停宏
+ * @param {String} reason - 暂停原因
+ */
+
+PushPause(reason) {
+    global pauseStack
+    ; 避免同一原因重复入栈
+    for i, v in pauseStack {
+        if (v = reason)
+            return
+    }
+    pauseStack.Push(reason)
+    StopAllTimers()
+    UpdateStatus("已暂停(" reason ")", "宏已暂停 - " reason)
+    DebugLog("暂停入栈: " reason " | 当前栈: " pauseStack.Length)
+}
+
+PopPause(reason) {
+    global pauseStack
+    idx := pauseStack.Length
+    while (idx > 0) {
+        if (pauseStack[idx] = reason) {
+            pauseStack.RemoveAt(idx)
+            break
+        }
+        idx--
+    }
+    if (pauseStack.Length = 0) {
+        StartAllTimers()
+        UpdateStatus("运行中", "宏已恢复")
+        DebugLog("暂停栈清空，宏恢复运行")
+    } else {
+        UpdateStatus("已暂停(" pauseStack[pauseStack.Length] ")", "宏仍暂停 - " pauseStack[pauseStack.Length])
+        DebugLog("暂停出栈: " reason " | 剩余: " pauseStack.Length)
+    }
+}
+
+GetCurrentPauseReason() {
+    global pauseStack
+    return pauseStack.Length ? pauseStack[pauseStack.Length] : ""
+}
+
+IsPaused() {
+    global pauseStack
+    return pauseStack.Length > 0
+}
+
 ; ==================== 图像和窗口检测 ====================
 /**
  * 窗口切换检查函数
@@ -805,7 +862,6 @@ ToggleMouseAutoMove(*) {
 CheckWindow() {
     static lastState := false
     currentState := WinActive("ahk_class Diablo IV Main Window Class")
-
     if (currentState != lastState) {
         OnWindowChange(currentState)
         lastState := currentState
@@ -817,23 +873,32 @@ CheckWindow() {
  * @param {Boolean} isActive - 暗黑4窗口是否激活
  */
 OnWindowChange(isActive) {
-    global isRunning, isPaused, previouslyPaused, statusText, statusBar
-
-    if (!isActive) {  ; 窗口失去焦点
-        if (isRunning) {
-            previouslyPaused := isPaused
-            if (!isPaused) {
-                StopAllTimers()
-                ReleaseAllKeys()
-                isPaused := true
-                UpdateStatus("已暂停(窗口切换)", "宏已暂停 - 窗口未激活")
+    global isRunning, pauseStack
+    if (!isActive) {
+        ; 只在没有“窗口切换”暂停时才入栈，避免重复
+        if (isRunning && !pauseStack.Has("窗口切换")) {
+            PushPause("窗口切换")
+        }
+    } else if (isRunning) {
+        ; 只移除“窗口切换”暂停，不影响其它暂停原因
+        idx := 0
+        for i, reason in pauseStack {
+            if (reason = "窗口切换") {
+                idx := i
+                break
             }
         }
-    } else if (isRunning && isPaused && !previouslyPaused) {  ; 窗口获得焦点且之前不是手动暂停
-        ReleaseAllKeys() 
-        StartAllTimers()
-        isPaused := false
-        UpdateStatus("运行中", "宏已恢复 - 窗口已激活")
+        if (idx) {
+            pauseStack.RemoveAt(idx)
+            DebugLog("窗口激活，移除窗口切换暂停")
+            if (pauseStack.Length = 0) {
+                StartAllTimers()
+                UpdateStatus("运行中", "宏已恢复")
+                DebugLog("暂停栈清空，宏恢复运行")
+            } else {
+                UpdateStatus("已暂停(" pauseStack[pauseStack.Length] ")", "宏仍暂停 - " pauseStack[pauseStack.Length])
+            }
+        }
     }
 }
 
@@ -930,27 +995,45 @@ CheckPauseByColor() {
 /**
  * 定时检测颜色并自动暂停/启动宏
  */
+
 AutoPauseByColor() {
-    global isRunning, isPaused, uCtrl
+    global isRunning, uCtrl, pauseStack
     ; 仅在启用时才执行
     if (!isRunning || uCtrl.ipMode.enable.Value != 1)
         return
 
     if (CheckPauseByColor()) {
-        ; 检测到红色时启动
-        if (isPaused) {
-            isPaused := false
-            StartAllTimers()
-            UpdateStatus("运行中", "检测到红色，自动启动")
-            DebugLog("识图触发自动启动")
+        ; 检测到血条，清空自动暂停，保留特殊暂停类型
+        if (IsPaused() && GetCurrentPauseReason() = "自动暂停") {
+            ; 保留需要的特殊暂停
+            preservedPauses := []
+            
+            ; 检查并保留Enter和NumpadEnter暂停
+            for reason in pauseStack {
+                if (reason = "Enter暂停" || reason = "NumpadEnter暂停")
+                    preservedPauses.Push(reason)
+            }
+            
+            if (preservedPauses.Length > 0) {
+                pauseStack := preservedPauses
+                DebugLog("血条触发自动启动，保留特殊暂停")
+            } else {
+                pauseStack := []
+                StartAllTimers()
+                UpdateStatus("运行中", "检测到血条，自动启动")
+                DebugLog("血条触发自动启动，全部暂停清空")
+            }
         }
     } else {
-        ; 红色消失时暂停
-        if (!isPaused) {
-            isPaused := true
+        ; 血条消失时暂停，但如果已经有特殊暂停则不添加自动暂停
+        if (!IsPaused() || 
+            (GetCurrentPauseReason() != "自动暂停" && 
+             GetCurrentPauseReason() != "Enter暂停" && 
+             GetCurrentPauseReason() != "NumpadEnter暂停")) {
+            PushPause("自动暂停")
             StopAllTimers()
-            UpdateStatus("已暂停", "红色消失，自动暂停")
-            DebugLog("识图触发自动暂停")
+            UpdateStatus("已暂停", "血条消失，自动暂停")
+            DebugLog("血条触发自动暂停")
         }
     }
 }
@@ -1621,104 +1704,85 @@ F3::{
 }
 
 Tab::{
-    global isRunning, isPaused
+    global isRunning
 
-    ; 发送原始键
-    Send "{Tab}"
+    Send "{Tab}" ; 保持Tab原有功能
 
-    ; 如果宏未运行，不做其他处理
     if !isRunning
         return
 
-    ; 切换暂停状态
-    isPaused := !isPaused
-
-    if isPaused {
-        StopAllTimers()
-        UpdateStatus("已暂停", "宏已暂停")
-    } else {
-        StartAllTimers()
-        UpdateStatus("运行中", "宏已继续")
+    ; 如果当前已经因为TAB暂停，则恢复，否则暂停
+    if (IsPaused() && GetCurrentPauseReason() = "TAB暂停") {
+        PopPause("TAB暂停")
+        DebugLog("Tab键恢复运行")
+    } else if (!IsPaused()) {
+        PushPause("TAB暂停")
+        DebugLog("Tab键触发暂停")
     }
 }
 
 Enter::{
-    global isRunning, isPaused
+    global isRunning
 
-    ; 发送原始键
-    Send "{Enter}"
+    Send "{Enter}" ; 保持Enter原有功能
 
-    ; 如果宏未运行，不做其他处理
     if !isRunning
         return
 
-    ; 切换暂停状态
-    isPaused := !isPaused
-
-    if isPaused {
-        StopAllTimers()
-        UpdateStatus("已暂停", "宏已暂停")
-    } else {
-        StartAllTimers()
-        UpdateStatus("运行中", "宏已继续")
+    ; 如果当前已经因为Enter暂停，则恢复，否则暂停
+    if (IsPaused() && GetCurrentPauseReason() = "Enter暂停") {
+        PopPause("Enter暂停")
+        DebugLog("Enter键恢复运行")
+    } else if (!IsPaused()) {
+        PushPause("Enter暂停")
+        DebugLog("Enter键触发暂停")
     }
 }
 
 NumpadEnter::{
-    global isRunning, isPaused
+    global isRunning
 
-    ; 发送原始NumpadEnter键
-    Send "{NumpadEnter}"
+    Send "{NumpadEnter}" ; 保持小键盘Enter原有功能
 
-    ; 如果宏未运行，不做其他处理
     if !isRunning
         return
 
-    ; 切换暂停状态
-    isPaused := !isPaused
-
-    if isPaused {
-        StopAllTimers()
-        UpdateStatus("已暂停", "宏已暂停")
-    } else {
-        StartAllTimers()
-        UpdateStatus("运行中", "宏已继续")
+    ; 如果当前已经因为NumpadEnter暂停，则恢复，否则暂停
+    if (IsPaused() && GetCurrentPauseReason() = "NumpadEnter暂停") {
+        PopPause("NumpadEnter暂停")
+        DebugLog("NumpadEnter键恢复运行")
+    } else if (!IsPaused()) {
+        PushPause("NumpadEnter暂停")
+        DebugLog("NumpadEnter键触发暂停")
     }
 }
 
-; 鼠标左键双击检测
 ~LButton::{
-    global isRunning, isPaused, previouslyPaused, uCtrl ; 声明这些是全局变量
+    global isRunning, uCtrl, pauseStack
     static lastClickTime := 0
-    ; 如果未启用双击暂停，直接返回
+    
+    ; 如果宏未运行或未启用双击暂停功能，直接返回
     if (!isRunning || uCtrl.dcPause.enable.Value != 1)
         return
         
     currentTime := A_TickCount
     
-    ; 检查是否在400ms内发生了双击
+    ; 检测400ms内的双击
     if (currentTime - lastClickTime < 400) {
-        ; 是双击，暂停宏
-        if (!isPaused) {
-            ; 记录之前的暂停状态
-            previouslyPaused := isPaused
-            
-            ; 暂停宏
-            StopAllTimers()
-            isPaused := true
+        ; 如果当前未暂停或不是因鼠标双击暂停，则触发"鼠标双击"暂停，并2秒后自动恢复
+        if (!IsPaused() || GetCurrentPauseReason() != "鼠标双击") {
+            PushPause("鼠标双击")
             UpdateStatus("已暂停(鼠标双击)", "宏已暂停 - 将在2秒后自动恢复")
             DebugLog("鼠标双击触发暂停，2秒后自动恢复")
-            
-            ; 设置2秒后自动恢复
-            SetTimer(ResumeAfterPause, -2000)  ; 负号表示只运行一次
+            SetTimer(ResumeAfterPause, -2000)
         }
-        
-        lastClickTime := 0  ; 重置以避免连续触发
+        ; 重置点击时间，防止连续多次触发
+        lastClickTime := 0
     } else {
-        ; 记录点击时间
         lastClickTime := currentTime
     }
 }
 
 ; 初始化GUI
 InitializeGUI()
+
