@@ -479,23 +479,14 @@ StartSingleTimer(name, control, timerFunc) {
  */
 StopAllTimers() {
     global boundSkillTimers, skillControls
-
+    
     ; 停止技能定时器
-    Loop 5 {
-        if boundSkillTimers.Has(A_Index) {
-            SetTimer(boundSkillTimers[A_Index], 0)
-            boundSkillTimers.Delete(A_Index)
-            DebugLog("停止技能" A_Index "定时器")
-        }
-
-        ; 如果是按住模式，确保释放按键
-        key := skillControls[A_Index].key.Value
-        if (key != "") {
-            Send "{" key " up}"
-        }
+    for i, timerFunc in boundSkillTimers {
+        SetTimer(timerFunc, 0)
     }
+    boundSkillTimers.Clear()
 
-    ; 停止所有其他定时器
+    ; 停止所有定时器
     SetTimer PressLeftClick, 0
     SetTimer PressRightClick, 0
     SetTimer PressDodge, 0
@@ -576,7 +567,6 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", descript
         ; 按住模式
         ; 检查是否是首次按下或需要重新按住
         if (!holdStates.Has(uniqueKey) || !holdStates[uniqueKey]) {
-            ; 首次按下
             if (shiftEnabled)
                 Send "{Shift down}"
             if (type = "mouse") {
@@ -593,9 +583,11 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", descript
             if (!lastReholdTime.Has(uniqueKey) || (currentTime - lastReholdTime[uniqueKey] > REHOLD_MIN_INTERVAL)) {
                 ; 重新按住
                 if (type = "mouse") {
+                    Click "up " mouseBtn
                     Click "down " mouseBtn
                     DebugLog("重新按住" . keyDesc . "，间隔: " (currentTime - lastReholdTime[uniqueKey]) "ms")
                 } else {
+                    Send "{" keyOrBtn " up}"
                     Send "{" keyOrBtn " down}"
                     DebugLog("重新按住" . keyDesc . "，间隔: " (currentTime - lastReholdTime[uniqueKey]) "ms")
                 }
@@ -697,15 +689,6 @@ PressForceMove() {
  * 发送按键
  * @param {String} key - 要发送的按键
  */
-SendKey(key) {
-    global shiftEnabled
-
-    if (shiftEnabled) {
-        SendWithShift(key)
-    } else {
-        Send "{" key "}"
-    }
-}
 
 /**
  * shift按键发送函数
@@ -841,11 +824,13 @@ OnWindowChange(isActive) {
             previouslyPaused := isPaused
             if (!isPaused) {
                 StopAllTimers()
+                ReleaseAllKeys()
                 isPaused := true
                 UpdateStatus("已暂停(窗口切换)", "宏已暂停 - 窗口未激活")
             }
         }
     } else if (isRunning && isPaused && !previouslyPaused) {  ; 窗口获得焦点且之前不是手动暂停
+        ReleaseAllKeys() 
         StartAllTimers()
         isPaused := false
         UpdateStatus("运行中", "宏已恢复 - 窗口已激活")
