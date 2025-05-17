@@ -7,7 +7,12 @@ ProcessSetPriority "High"
 global DEBUG := false              ; 是否启用调试模式
 global debugLogFile := A_ScriptDir "\debugd4.log"
 global isRunning := false          ; 宏是否运行中
-global pauseStack := []            ; 暂停原因栈，支持多重嵌套
+global isPaused := Map(
+    "window", false,  ; 窗口检测
+    "enter", false,  ; Enter键检测
+    "tab", false,  ; 界面检测
+    "blood", false      ; 血条检测
+)                                   ; 暂停状态映射  
 global counter := 0
 global currentHotkey := "F1"       ; 当前热键
 
@@ -174,7 +179,7 @@ CreateAllControls() {
     myGui.AddText("x30 y515 w30 h20", "喝药:")
     myGui.AddText("x30 y545 w30 h20", "强移:")
     myGui.AddText("x300 y100 w70 h20", "双击暂停:")
-    myGui.AddText("x300 y70 w70 h20", "自动启停：")
+    myGui.AddText("x300 y70 w70 h20", "战斗检测：")
     uCtrl := {}
 
     uCtrl.dodge := {
@@ -285,15 +290,11 @@ ValidateSleepInput(ctrl, *) {
  * @param {String} barText - 状态栏文本
  */
 UpdateStatus(status, barText) {
-    global statusText, statusBar, pauseStack
-    ; 如果有暂停，显示所有暂停原因
-    if (pauseStack.Length > 0) {
-        reasons := ""
-        for i, reason in pauseStack
-            reasons .= (i > 1 ? "，" : "") . reason
-        statusText.Value := "状态: 已暂停(" reasons ")"
-        statusBar.Text := "宏已暂停 - " reasons
-        DebugLog("状态更新: 已暂停(" reasons ") | " barText)
+    global statusText, statusBar
+    if (IsAnyPaused()) {
+        statusText.Value := "状态: 已暂停"
+        statusBar.Text := "宏已暂停 - " barText
+        DebugLog("状态更新: 已暂停 | " barText)
     } else {
         statusText.Value := "状态: " status
         statusBar.Text := barText
@@ -306,39 +307,37 @@ UpdateStatus(status, barText) {
  * 切换宏运行状态
  */
 ToggleMacro(*) {
-    global isRunning, mouseAutoMoveEnabled, mouseAutoMove, pauseStack
+    global isRunning, mouseAutoMoveEnabled, mouseAutoMove
 
     ; 确保完全停止所有定时器
     StopAllTimers()
-    StopImagePauseTimer()
     StopWindowCheckTimer()
+    StopAutoPauseTimer()
+    StopImagePauseTimer()
     ; 切换运行状态
     isRunning := !isRunning
-
     if isRunning {
         ; 初始化窗口分辨率和技能位置
         GetDynamicSkillPositions()
-        ; 重置暂停状态
-        pauseStack := []
-
         ; 确保鼠标自动移动状态与GUI勾选框一致
         mouseAutoMoveEnabled := (mouseAutoMove.enable.Value = 1)
-
+        StartWindowCheckTimer()
+        StartAutoPauseTimer()
+        StartImagePauseTimer()
         ; 只有在暗黑4窗口激活时才启动定时器
         if WinActive("ahk_class Diablo IV Main Window Class") {
             StartAllTimers()
-            ; 启动自动识图定时器
-            StartImagePauseTimer()
-            ; 启动窗口检测定时器
-            StartWindowCheckTimer()
             UpdateStatus("运行中", "宏已启动")
         } else {
-            PushPause("窗口切换")
             UpdateStatus("已暂停(窗口切换)", "宏已暂停 - 窗口未激活")
         }
     } else {
-        ; 确保重置所有状态
-        pauseStack := []
+        StopWindowCheckTimer()
+        StopAutoPauseTimer()
+        StopImagePauseTimer()
+        for key, _ in isPaused {
+            isPaused[key] := false
+        }
         UpdateStatus("已停止", "宏已停止")
 
         ; 确保释放所有按键
@@ -352,65 +351,89 @@ ToggleMacro(*) {
  * 释放所有可能被按住的按键
  */
 ReleaseAllKeys() {
-    global skillControls, uCtrl, holdStates
-
+    global holdStates    
+    for uniqueKey, _ in holdStates {
+        ; 解析 uniqueKey 得到实际按键
+        arr := StrSplit(uniqueKey, ":")
+        type := arr[1]
+        key := arr[2]
+        if (type = "mouse") {
+            Click "up " key
+        } else {
+            Send "{" key " up}"
+        }
+    }
+    holdStates.Clear()
     ; 释放修饰键
     Send "{Shift up}"
     Send "{Ctrl up}"
     Send "{Alt up}"
 
-    ; 释放技能键
-    Loop 5 {
-        key := skillControls[A_Index].key.Value
-        if key != "" {
-            Send "{" key " up}"
-            DebugLog("释放技能" A_Index " 键: " key)
-        }
-    }
-
-    ; 释放功能键
-    if (uCtrl.potion.key.Value != "") {
-        Send "{" uCtrl.potion.key.Value " up}"
-        DebugLog("释放喝药键: " uCtrl.potion.key.Value)
-    }
-    
-    if (uCtrl.forceMove.key.Value != "") {
-        Send "{" uCtrl.forceMove.key.Value " up}"
-        DebugLog("释放强制移动键: " uCtrl.forceMove.key.Value)
-    }
-    
-    ; 释放空格键
-    Send "{Space up}"
-    DebugLog("释放空格键")
-
-    ; 释放法师技能键
-    for skillName in ["huoDun", "dianMao", "dianQiu", "binDun"] {
-        if (uCtrl.HasProp(skillName) && uCtrl.%skillName%.key.Value != "") {
-            key := uCtrl.%skillName%.key.Value
-            Send "{" key " up}"
-            DebugLog("释放" skillName "键: " key)
-        }
-    }
-
-    ; 释放鼠标按键 (只需要一次)
-    SetMouseDelay -1
-    Click "up left"
-    Click "up right"
-    DebugLog("释放鼠标左右键")
-
     ; 清空所有按住状态跟踪
-    holdStates.Clear() 
-    
-    DebugLog("已释放所有按键")
+    holdStates.Clear()
+
+    DebugLog("已释放所有技能键、功能键、法师技能、鼠标键和修饰键")
+}
+
+; ==================== 暂停管理 ====================
+
+IsAnyPaused() {
+    global isPaused, isRunning
+    if (!isRunning)
+        return false
+    for _, v in isPaused {
+        if v
+            return true
+    }
+    return false
 }
 
 /**
- * 自动恢复暂停的功能
+ * 切换暂停状态
  */
-ResumeAfterPause() {
-    ; 只弹出“鼠标双击”暂停
-    PopPause("鼠标双击")
-    DebugLog("双击暂停2秒后自动恢复")
+/**
+ * 切换暂停状态，增加恢复条件检查
+ */
+TogglePause(reason, state) {
+    global isPaused, isRunning
+    if (!isRunning)
+        return
+    ; 确保原因存在
+    if (!isPaused.Has(reason)) {
+        isPaused[reason] := false
+    }
+    
+    ; 如果是尝试恢复操作(state=false)且原因是color或special，先检查条件
+    if !state {
+        res := GetWindowResolutionAndScale()
+        colors := CheckKeyPoints(res)
+        enterDetected := CheckPauseByEnter()
+        
+        ; 只有同时满足"检测到蓝色"和"没有检测到Enter提示"才允许恢复
+        if (!colors.isBlueColor || enterDetected || colors.isRedColor) {
+            DebugLog("恢复条件未满足: 没有退出界面=" colors.isBlueColor ", 输入框未关闭=" enterDetected ", 地图未关闭=" colors.isRedColor)
+            DebugLog("保持暂停状态")
+            return
+        } else {
+            DebugLog("恢复条件已满足: 重新启动宏")
+        }
+    }
+    
+    prev := IsAnyPaused()
+    isPaused[reason] := state
+    now := IsAnyPaused()
+    
+    DebugLog("暂停状态变更: 原因=" reason ", 状态=" state ", 之前全局=" prev ", 现在全局=" now)
+    
+    if (now != prev) {
+        if (now) {
+            StopAllTimers()
+            UpdateStatus("已暂停", "宏已暂停 - 原因: " reason)
+        } else {
+            StartAllTimers()
+            UpdateStatus("运行中", "宏已恢复 - 原因: " reason)
+        }
+    }
 }
 
 ; ==================== 定时器管理 ====================
@@ -429,7 +452,6 @@ StartAllTimers() {
 
     ; 启动鼠标自动移动定时器
     StartMouseAutoMoveTimer()
-    
     DebugLog("所有定时器已启动")
 }
 
@@ -529,20 +551,6 @@ StopAllTimers() {
 }
 
 /**
- * 启动自动暂停定时器
- */
-StartImagePauseTimer() {
-    SetTimer AutoPauseByColor, 50
-}
-
-/**
- * 停止自动暂停定时器
- */
-StopImagePauseTimer() {
-    SetTimer AutoPauseByColor, 0
-}
-
-/**
  * 启动窗口检测定时器
  */
 StartWindowCheckTimer() {
@@ -570,7 +578,8 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", descript
     global shiftEnabled, buffThreshold, holdStates
     static lastReholdTime := Map()     ; 存储每个按键上次重新按住的时间
     static REHOLD_MIN_INTERVAL := 2000 ; 重新按住的最小间隔(毫秒)
-    
+    if (IsAnyPaused())
+    return
     ; 生成唯一键标识符
     uniqueKey := type . ":" . (type="mouse" ? mouseBtn : keyOrBtn)
     currentTime := A_TickCount
@@ -639,7 +648,7 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", descript
  */
 PressSkill(skillNum) {
     global isRunning, skillControls, skillPositions
-    if (!isRunning || IsPaused() || !skillControls[skillNum].enable.Value)
+    if (!isRunning || IsAnyPaused() || !skillControls[skillNum].enable.Value)
         return
     key := skillControls[skillNum].key.Value
     if (key = "")
@@ -654,7 +663,7 @@ PressSkill(skillNum) {
  */
 PressLeftClick() {
     global isRunning, mouseControls, skillPositions
-    if (!isRunning || IsPaused() || !mouseControls.left.enable.Value)
+    if (!isRunning || IsAnyPaused() || !mouseControls.left.enable.Value)
         return
     mode := mouseControls.left.mode.Value
     pos := skillPositions.Has("left") ? skillPositions["left"] : ""
@@ -666,7 +675,7 @@ PressLeftClick() {
  */
 PressRightClick() {
     global isRunning, mouseControls, skillPositions
-    if (!isRunning || IsPaused() || !mouseControls.right.enable.Value)
+    if (!isRunning || IsAnyPaused() || !mouseControls.right.enable.Value)
         return
     mode := mouseControls.right.mode.Value
     pos := skillPositions.Has("right") ? skillPositions["right"] : ""
@@ -679,7 +688,7 @@ PressRightClick() {
 PressDodge() {
     global isRunning, uCtrl
 
-    if (!isRunning || IsPaused() || uCtrl.dodge.enable.Value != 1)
+    if (!isRunning || IsAnyPaused() || uCtrl.dodge.enable.Value != 1)
         return
     ; 空格键总是使用连点模式
     HandleKeyMode("Space", SKILL_MODE_CLICK, "", "key", "", "空格键")
@@ -690,8 +699,8 @@ PressDodge() {
  */
 PressPotion() {
     global isRunning, uCtrl
-    
-    if (!isRunning || IsPaused() || uCtrl.potion.enable.Value != 1)
+
+    if (!isRunning || IsAnyPaused() || uCtrl.potion.enable.Value != 1)
         return
     key := uCtrl.potion.key.Value
     if (key != "") {
@@ -705,7 +714,7 @@ PressPotion() {
 PressForceMove() {
     global isRunning, uCtrl
 
-    if (!isRunning || IsPaused() || uCtrl.forceMove.enable.Value != 1)
+    if (!isRunning || IsAnyPaused() || uCtrl.forceMove.enable.Value != 1)
         return
     key := uCtrl.forceMove.key.Value
     if (key != "") {
@@ -723,11 +732,11 @@ PressForceMove() {
  * @param {String} key - 要发送的按键
  */
 SendWithShift(key) {
-    Send "{Shift down}"
+    Send "{Blind} {Shift down}"
     Sleep 10
     Send "{" key "}"
     Sleep 10
-    Send "{Shift up}"
+    Send "{Blind} {Shift up}"
 }
 
 /**
@@ -743,9 +752,9 @@ ToggleShift(*) {
  * 鼠标自动移动函数
  */
 MoveMouseToNextPoint() {
-    global mouseAutoMoveCurrentPoint, isRunning, mouseAutoMoveEnabled
+    global mouseAutoMoveCurrentPoint, isRunning, mouseAutoMoveEnabled, isPaused
 
-    if (!isRunning || IsPaused() || !mouseAutoMoveEnabled)
+    if (!isRunning || isPaused || !mouseAutoMoveEnabled)
         return
 
     try {
@@ -779,7 +788,7 @@ MoveMouseToNextPoint() {
  * 切换鼠标自动移动功能
  */
 ToggleMouseAutoMove(*) {
-    global mouseAutoMoveEnabled, mouseAutoMove, isRunning, timerStates
+    global mouseAutoMoveEnabled, mouseAutoMove, isRunning, timerStates, isPaused
 
     mouseAutoMoveEnabled := !mouseAutoMoveEnabled
 
@@ -787,7 +796,7 @@ ToggleMouseAutoMove(*) {
     mouseAutoMove.enable.Value := mouseAutoMoveEnabled ? 1 : 0
 
     ; 如果宏已经在运行且未暂停，则更新定时器状态
-    if (isRunning && !IsPaused()) {
+    if (isRunning && !isPaused) {
         if (mouseAutoMoveEnabled) {
             interval := Integer(mouseAutoMove.interval.Value)
             if (interval > 0) {
@@ -803,55 +812,6 @@ ToggleMouseAutoMove(*) {
     }
 
     DebugLog("鼠标自动移动状态切换: " . (mouseAutoMoveEnabled ? "启用" : "禁用"))
-}
-
-; ==================== 暂停/恢复核心函数 ====================
-/**
- * 暂停宏
- * @param {String} reason - 暂停原因
- */
-
-PushPause(reason) {
-    global pauseStack
-    ; 避免同一原因重复入栈
-    for i, v in pauseStack {
-        if (v = reason)
-            return
-    }
-    pauseStack.Push(reason)
-    StopAllTimers()
-    UpdateStatus("已暂停(" reason ")", "宏已暂停 - " reason)
-    DebugLog("暂停入栈: " reason " | 当前栈: " pauseStack.Length)
-}
-
-PopPause(reason) {
-    global pauseStack
-    idx := pauseStack.Length
-    while (idx > 0) {
-        if (pauseStack[idx] = reason) {
-            pauseStack.RemoveAt(idx)
-            break
-        }
-        idx--
-    }
-    if (pauseStack.Length = 0) {
-        StartAllTimers()
-        UpdateStatus("运行中", "宏已恢复")
-        DebugLog("暂停栈清空，宏恢复运行")
-    } else {
-        UpdateStatus("已暂停(" pauseStack[pauseStack.Length] ")", "宏仍暂停 - " pauseStack[pauseStack.Length])
-        DebugLog("暂停出栈: " reason " | 剩余: " pauseStack.Length)
-    }
-}
-
-GetCurrentPauseReason() {
-    global pauseStack
-    return pauseStack.Length ? pauseStack[pauseStack.Length] : ""
-}
-
-IsPaused() {
-    global pauseStack
-    return pauseStack.Length > 0
 }
 
 ; ==================== 图像和窗口检测 ====================
@@ -873,32 +833,15 @@ CheckWindow() {
  * @param {Boolean} isActive - 暗黑4窗口是否激活
  */
 OnWindowChange(isActive) {
-    global isRunning, pauseStack
+    global isRunning
     if (!isActive) {
-        ; 只在没有“窗口切换”暂停时才入栈，避免重复
-        if (isRunning && !pauseStack.Has("窗口切换")) {
-            PushPause("窗口切换")
+        ; 暗黑4窗口失去激活时，推送“窗口切换”暂停
+        if (isRunning) {
+            TogglePause("window", true)
         }
     } else if (isRunning) {
-        ; 只移除“窗口切换”暂停，不影响其它暂停原因
-        idx := 0
-        for i, reason in pauseStack {
-            if (reason = "窗口切换") {
-                idx := i
-                break
-            }
-        }
-        if (idx) {
-            pauseStack.RemoveAt(idx)
-            DebugLog("窗口激活，移除窗口切换暂停")
-            if (pauseStack.Length = 0) {
-                StartAllTimers()
-                UpdateStatus("运行中", "宏已恢复")
-                DebugLog("暂停栈清空，宏恢复运行")
-            } else {
-                UpdateStatus("已暂停(" pauseStack[pauseStack.Length] ")", "宏仍暂停 - " pauseStack[pauseStack.Length])
-            }
-        }
+        ; 暗黑4窗口激活时，弹出“窗口切换”暂停
+        TogglePause("window", false)
     }
 }
 
@@ -958,33 +901,100 @@ GetDynamicSkillPositions() {
     }
 }
 
-/**
- * 检查颜色时使用缩放比例
- */
-CheckPauseByColor() {
-    res := GetWindowResolutionAndScale()
 
+/**
+ * 专用的自动暂停函数
+ * 检测特定坐标的颜色，并根据结果控制宏的暂停状态
+ * 支持像素缓存，避免重复采样
+ */
+CheckKeyPoints(res, pixelCache := unset) {
     try {
-        ; 定义检测点的坐标
+        ; 定义关键点的坐标
+        dfx := Round(1535 * res.scaleW), dty := Round(1880 * res.scaleH)
+        tabx := Round(3795 * res.scaleW), tab := Round(90 * res.scaleH)
+        
+        ; 优先使用缓存
+        color1 := (IsSet(pixelCache) && pixelCache.Has("dfx")) ? pixelCache["dfx"] : GetPixelRGB(dfx, dty)
+        color2 := (IsSet(pixelCache) && pixelCache.Has("tab")) ? pixelCache["tab"] : GetPixelRGB(tabx, tab)
+
+        ; 进行颜色判断
+        isBlueColor := (color1.r + 50 < color1.b && color1.b >= 100)
+        isRedColor := (color2.r > 100 && color2.g < 60 && color2.b < 60)
+        
+        ; 返回颜色信息和判断结果
+        return {
+            dfxcolor: color1,
+            tabcolor: color2,
+            isBlueColor: isBlueColor,
+            isRedColor: isRedColor,
+            positions: {
+                dfx: dfx, dty: dty,
+                tabx: tabx, tab: tab
+            }
+        }
+    } catch as err {
+        DebugLog("关键点颜色检测失败: " err.Message)
+        return {
+            dfxcolor: {}, 
+            tabcolor: {}, 
+            isBlueColor: false,
+            isRedColor: false,
+            positions: {}
+        }
+    }
+}
+
+/**
+ * 检测屏幕底部是否有红色确认提示，如对话框、警告等
+ * 支持像素缓存，避免重复采样
+ * @returns {Boolean} - 是否检测到红色提示
+ */
+CheckPauseByEnter(res := unset, pixelCache := unset) {
+    if !IsSet(res)
+        res := GetWindowResolutionAndScale()
+    
+    baseX := Round(30 * res.scaleW)
+    baseY := Round(1440 * res.scaleH)
+    offset := Round(90 * res.scaleW)
+    DebugLog("Enter检测点基准坐标: x=" baseX ", y=" baseY ", 偏移=" offset)
+    Loop 6 {
+        x := Round(baseX + offset * (A_Index - 1))
+        y := baseY
+        key := "enter" A_Index
+        colorObj := (IsSet(pixelCache) && pixelCache.Has(key)) ? pixelCache[key] : GetPixelRGB(x, y)
+        if (colorObj.r > 100 && colorObj.g < 60 && colorObj.b < 60) {
+            DebugLog("检测到红色提示点: (" x "," y ") R=" colorObj.r ",G=" colorObj.g ",B=" colorObj.b)
+            return true
+        }
+    }
+    DebugLog("未检测到红色提示点")
+    return false
+}
+
+/**
+ * 专用的血条检测函数
+ * 支持像素缓存，避免重复采样
+ */
+CheckPauseByColor(res := unset, pixelCache := unset) {
+    if !IsSet(res)
+        res := GetWindowResolutionAndScale()
+    try {
         x1 := Round(1605 * res.scaleW), x2 := Round(1435 * res.scaleW)
         y1 := Round(85 * res.scaleH), y2 := Round(95 * res.scaleH)
-
-        ; 检测颜色
-        colors := [
-            GetPixelRGB(x1, y1),
-            GetPixelRGB(x1, y2),
-            GetPixelRGB(x2, y1),
-            GetPixelRGB(x2, y2)
-        ]
-
-        ; 统计满足红色条件的点数
+        keys := ["blood1", "blood2", "blood3", "blood4"]
+        coords := [[x1, y1], [x1, y2], [x2, y1], [x2, y2]]
+        colors := []
+        Loop 4 {
+            key := keys[A_Index]
+            xy := coords[A_Index]
+            color := (IsSet(pixelCache) && pixelCache.Has(key)) ? pixelCache[key] : GetPixelRGB(xy[1], xy[2])
+            colors.Push(color)
+        }
         hitCount := 0
         for color in colors {
             if (color.r > 100 && color.g < 60 && color.b < 60)
                 hitCount++
         }
-
-        ; 至少命中2个点才返回 true
         return hitCount >= 2
     } catch as err {
         DebugLog("颜色检测失败: " err.Message)
@@ -995,47 +1005,112 @@ CheckPauseByColor() {
 /**
  * 定时检测颜色并自动暂停/启动宏
  */
-
 AutoPauseByColor() {
-    global isRunning, uCtrl, pauseStack
-    ; 仅在启用时才执行
+    global isRunning, isPaused, uCtrl
     if (!isRunning || uCtrl.ipMode.enable.Value != 1)
         return
 
-    if (CheckPauseByColor()) {
-        ; 检测到血条，清空自动暂停，保留特殊暂停类型
-        if (IsPaused() && GetCurrentPauseReason() = "自动暂停") {
-            ; 保留需要的特殊暂停
-            preservedPauses := []
-            
-            ; 检查并保留Enter和NumpadEnter暂停
-            for reason in pauseStack {
-                if (reason = "Enter暂停" || reason = "NumpadEnter暂停")
-                    preservedPauses.Push(reason)
-            }
-            
-            if (preservedPauses.Length > 0) {
-                pauseStack := preservedPauses
-                DebugLog("血条触发自动启动，保留特殊暂停")
-            } else {
-                pauseStack := []
-                StartAllTimers()
-                UpdateStatus("运行中", "检测到血条，自动启动")
-                DebugLog("血条触发自动启动，全部暂停清空")
-            }
+    ; 统一采样血条检测点
+    res := GetWindowResolutionAndScale()
+    pixelCache := Map()
+    x1 := Round(1605 * res.scaleW), x2 := Round(1435 * res.scaleW)
+    y1 := Round(85 * res.scaleH), y2 := Round(95 * res.scaleH)
+    pixelCache["blood1"] := GetPixelRGB(x1, y1)
+    pixelCache["blood2"] := GetPixelRGB(x1, y2)
+    pixelCache["blood3"] := GetPixelRGB(x2, y1)
+    pixelCache["blood4"] := GetPixelRGB(x2, y2)
+
+    if (CheckPauseByColor(res, pixelCache)) {
+        TogglePause("blood", false)
+        UpdateStatus("运行中", "检测到血条，自动启动")
+        DebugLog("识图触发自动启动")
+    } else { 
+        TogglePause("blood", true)
+        UpdateStatus("已暂停", "血条消失，自动暂停")
+        DebugLog("识图触发自动暂停")
+    }
+}
+
+/**
+ * 定时检测颜色并自动暂停/启动宏
+ */
+AutoPause() {
+    global isRunning, isPaused
+    if (isRunning) {  
+        res := GetWindowResolutionAndScale()
+        ; 统一采样所有关键点
+        pixelCache := Map()
+        ; CheckKeyPoints
+        dfx := Round(1535 * res.scaleW), dty := Round(1880 * res.scaleH)
+        tabx := Round(3795 * res.scaleW), tab := Round(90 * res.scaleH)
+        pixelCache["dfx"] := GetPixelRGB(dfx, dty)
+        pixelCache["tab"] := GetPixelRGB(tabx, tab)
+        ; CheckPauseByEnter
+        baseX := Round(30 * res.scaleW)
+        baseY := Round(1440 * res.scaleH)
+        offset := Round(90 * res.scaleW)
+        Loop 6 {
+            x := Round(baseX + offset * (A_Index - 1))
+            y := baseY
+            pixelCache["enter" A_Index] := GetPixelRGB(x, y)
         }
-    } else {
-        ; 血条消失时暂停，但如果已经有特殊暂停则不添加自动暂停
-        if (!IsPaused() || 
-            (GetCurrentPauseReason() != "自动暂停" && 
-             GetCurrentPauseReason() != "Enter暂停" && 
-             GetCurrentPauseReason() != "NumpadEnter暂停")) {
-            PushPause("自动暂停")
-            StopAllTimers()
-            UpdateStatus("已暂停", "血条消失，自动暂停")
-            DebugLog("血条触发自动暂停")
+
+        colors := CheckKeyPoints(res, pixelCache)
+        enterDetected := CheckPauseByEnter(res, pixelCache)
+
+        if (colors.isRedColor) {
+            TogglePause("tab", true)
+            UpdateStatus("已暂停", "检测到地图界面，自动暂停")
+            DebugLog("识图检测到地图界面，触发自动暂停")
+        } 
+        else if (enterDetected) {
+            TogglePause("enter", true)
+            UpdateStatus("已暂停", "检测到确认对话框，自动暂停")
+            DebugLog("检测到Enter提示，触发自动暂停")
+        }
+        else if (isPaused["tab"] || isPaused["enter"]) {
+            if (isPaused["tab"]) {
+                TogglePause("tab", false)
+                UpdateStatus("运行中", "界面关闭，自动恢复")
+                DebugLog("识图检测界面关闭，触发自动恢复")
+            }
+            if (isPaused["enter"]) {
+                TogglePause("enter", false)
+                UpdateStatus("运行中", "确认对话框消失，自动恢复")
+                DebugLog("Enter提示消失，触发自动恢复")
+            }
         }
     }
+}
+
+/**
+ * 启动自动战斗定时器
+ */
+StartImagePauseTimer() {
+    SetTimer AutoPauseByColor, 50
+}
+
+/**
+ * 停止自动战斗定时器
+ */
+StopImagePauseTimer() {
+    SetTimer AutoPauseByColor, 0
+}
+
+/**
+ * 启动特殊点检测定时器
+ */
+StartAutoPauseTimer() {
+    SetTimer(AutoPause, 100)
+    DebugLog("特殊点检测定时器已启动")
+}
+
+/**
+ * 停止特殊点检测定时器
+ */
+StopAutoPauseTimer() {
+    SetTimer(AutoPause, 0)
+    DebugLog("特殊点检测定时器已停止")
 }
 
 /**
@@ -1703,80 +1778,20 @@ F3::{
     }
 }
 
-Tab::{
-    global isRunning
-
-    Send "{Tab}" ; 保持Tab原有功能
-
-    if !isRunning
-        return
-
-    ; 如果当前已经因为TAB暂停，则恢复，否则暂停
-    if (IsPaused() && GetCurrentPauseReason() = "TAB暂停") {
-        PopPause("TAB暂停")
-        DebugLog("Tab键恢复运行")
-    } else if (!IsPaused()) {
-        PushPause("TAB暂停")
-        DebugLog("Tab键触发暂停")
-    }
-}
-
-Enter::{
-    global isRunning
-
-    Send "{Enter}" ; 保持Enter原有功能
-
-    if !isRunning
-        return
-
-    ; 如果当前已经因为Enter暂停，则恢复，否则暂停
-    if (IsPaused() && GetCurrentPauseReason() = "Enter暂停") {
-        PopPause("Enter暂停")
-        DebugLog("Enter键恢复运行")
-    } else if (!IsPaused()) {
-        PushPause("Enter暂停")
-        DebugLog("Enter键触发暂停")
-    }
-}
-
-NumpadEnter::{
-    global isRunning
-
-    Send "{NumpadEnter}" ; 保持小键盘Enter原有功能
-
-    if !isRunning
-        return
-
-    ; 如果当前已经因为NumpadEnter暂停，则恢复，否则暂停
-    if (IsPaused() && GetCurrentPauseReason() = "NumpadEnter暂停") {
-        PopPause("NumpadEnter暂停")
-        DebugLog("NumpadEnter键恢复运行")
-    } else if (!IsPaused()) {
-        PushPause("NumpadEnter暂停")
-        DebugLog("NumpadEnter键触发暂停")
-    }
-}
-
-~LButton::{
-    global isRunning, uCtrl, pauseStack
+~LButton::
+{
+    global isRunning, uCtrl, isPaused
     static lastClickTime := 0
-    
-    ; 如果宏未运行或未启用双击暂停功能，直接返回
+
     if (!isRunning || uCtrl.dcPause.enable.Value != 1)
         return
         
     currentTime := A_TickCount
     
-    ; 检测400ms内的双击
     if (currentTime - lastClickTime < 400) {
-        ; 如果当前未暂停或不是因鼠标双击暂停，则触发"鼠标双击"暂停，并2秒后自动恢复
-        if (!IsPaused() || GetCurrentPauseReason() != "鼠标双击") {
-            PushPause("鼠标双击")
-            UpdateStatus("已暂停(鼠标双击)", "宏已暂停 - 将在2秒后自动恢复")
-            DebugLog("鼠标双击触发暂停，2秒后自动恢复")
-            SetTimer(ResumeAfterPause, -2000)
-        }
-        ; 重置点击时间，防止连续多次触发
+        TogglePause("doubleClick", true)
+        SetTimer(() => TogglePause("doubleClick", false), -2000)
+        
         lastClickTime := 0
     } else {
         lastClickTime := currentTime
@@ -1785,4 +1800,3 @@ NumpadEnter::{
 
 ; 初始化GUI
 InitializeGUI()
-
