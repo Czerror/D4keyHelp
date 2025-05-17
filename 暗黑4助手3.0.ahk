@@ -28,10 +28,10 @@ global currentProfileName := "默认" ; 当前配置名称
 global profileList := []           ; 配置列表
 
 ; 控件映射
-global skillControls := Map()      ; 技能控件映射
-global skillBuffControls := Map()  ; 技能BUFF控件映射
-global mouseControls := {}         ; 鼠标控件
-global uCtrl := {}       ; 功能键控件
+global cSkill := Map()      ; 技能控件映射
+global bSkill := Map()  ; 技能BUFF控件映射
+global mSkill := {}         ; 鼠标控件
+global uCtrl := Map()                 ; 功能键控件
 global mouseAutoMove := {}         ; 鼠标自动移动控件
 global forceMove := {}             ; 强制移动控件
 
@@ -39,7 +39,7 @@ global forceMove := {}             ; 强制移动控件
 global SKILL_MODE_CLICK := 1       ; 连点模式
 global SKILL_MODE_BUFF := 2        ; BUFF模式
 global SKILL_MODE_HOLD := 3        ; 按住模式
-global skillModeNames := ["连点", "BUFF", "按住"]
+global skillMod := ["连点", "BUFF", "按住"]
 
 ; 功能状态变量
 global shiftEnabled := false       ; 是否按住Shift
@@ -54,6 +54,9 @@ global skillPositions := Map()     ; 存储技能位置坐标
 global boundSkillTimers := Map()   ; 存储绑定的技能定时器函数
 global timerStates := Map()        ; 用于跟踪定时器状态
 global holdStates := Map()         ; 跟踪按键按住状态
+global keyQueue := []         ; 按键队列
+global keyQueueLock := false  ; 队列锁
+global keyQueueTimer := ""    ; 队列调度定时器
 
 ; ==================== 工具类函数 ====================
 /**
@@ -94,7 +97,7 @@ CreateMainGUI() {
     global profileDropDown, profileNameInput
 
     ; 创建主窗口
-    myGui := Gui("", "暗黑4助手 v3.0")
+    myGui := Gui("", "暗黑4助手 v3.1")
     myGui.BackColor := "FFFFFF"
     myGui.SetFont("s10", "Microsoft YaHei UI")
 
@@ -143,88 +146,88 @@ CreateMainGUI() {
  * 创建所有控件
  */
 CreateAllControls() {
-    global myGui, skillControls, mouseControls, uCtrl
-    global mouseAutoMove, skillModeNames, SKILL_MODE_CLICK
+    global myGui, cSkill, mSkill, uCtrl
+    global mouseAutoMove, skillMod, SKILL_MODE_CLICK
 
     ; === 创建技能控件 ===
-    skillControls := Map()
+    cSkill := Map()
     Loop 5 {
         yPos := 305 + (A_Index-1) * 30
         myGui.AddText("x30 y" yPos " w40 h20", "技能" A_Index ":")
-        skillControls[A_Index] := {
+        cSkill[A_Index] := {
             key: myGui.AddHotkey("x90 y" yPos " w30 h20", A_Index),
             enable: myGui.AddCheckbox("x130 y" yPos " w45 h20", "启用"),
             interval: myGui.AddEdit("x200 y" yPos " w40 h20", "20"),
-            mode: myGui.AddDropDownList("x270 y" yPos " w60 h120 Choose1", skillModeNames)
+            mode: myGui.AddDropDownList("x270 y" yPos " w60 h120 Choose1", skillMod)
         }
     }
 
     ; === 创建鼠标控件 ===
-    mouseControls := {
+    mSkill := {
         left: {
             enable: myGui.AddCheckbox("x130 y455 w45 h20", "启用"),
             interval: myGui.AddEdit("x200 y455 w40 h20", "80"),
-            mode: myGui.AddDropDownList("x270 y455 w60 h120 Choose1", skillModeNames)
+            mode: myGui.AddDropDownList("x270 y455 w60 h120 Choose1", skillMod)
         },
         right: {
             enable: myGui.AddCheckbox("x130 y485 w45 h20", "启用"),
             interval: myGui.AddEdit("x200 y485 w40 h20", "300"),
-            mode: myGui.AddDropDownList("x270 y485 w60 h120 Choose1", skillModeNames)
+            mode: myGui.AddDropDownList("x270 y485 w60 h120 Choose1", skillMod)
         }
     }
     myGui.AddText("x30 y455 w40 h20", "左键:")
     myGui.AddText("x30 y485 w40 h20", "右键:")
 
     ; === 创建控件 ===
-    myGui.AddText("x30 y515 w30 h20", "喝药:")
-    myGui.AddText("x30 y545 w30 h20", "强移:")
-    myGui.AddText("x300 y100 w70 h20", "双击暂停:")
-    myGui.AddText("x300 y70 w70 h20", "战斗检测：")
-    uCtrl := {}
-
-    uCtrl.dodge := {
-        key: myGui.AddText("x30 y575 w30 h20", "空格:"),
-        enable: myGui.AddCheckbox("x130 y575 w45 h20", "启用"),
-        interval: myGui.AddEdit("x200 y575 w40 h20", "20")
-    }
-    uCtrl.potion := {
-        key: myGui.AddHotkey("x90 y515 w35 h20", "q"),
-        enable: myGui.AddCheckbox("x130 y515 w45 h20", "启用"),
-        interval: myGui.AddEdit("x200 y515 w40 h20", "3000")
-    }
-    uCtrl.forceMove := {
-        key: myGui.AddHotkey("x90 y545 w35 h20", "f"),
-        enable: myGui.AddCheckbox("x130 y545 w45 h20", "启用"),
-        interval: myGui.AddEdit("x200 y545 w40 h20", "50")
-    }
-
-    uCtrl.ipMode := {
-        enable: myGui.AddCheckbox("x360 y70 w50")
-    }
-
-    uCtrl.dcPause := {
-        enable: myGui.AddCheckbox("x360 y100 w30 h20")
-    }
-
+    uCtrl := Map()
+    uCtrl["dodge"] := Map(
+        "text", myGui.AddText("x30 y575 w30 h20", "空格:"),
+        "key", { Value: "Space" },
+        "enable", myGui.AddCheckbox("x130 y575 w45 h20", "启用"),
+        "interval", myGui.AddEdit("x200 y575 w40 h20", "20")
+    )
+    uCtrl["potion"] := Map(
+        "text", myGui.AddText("x30 y515 w30 h20", "喝药:"),
+        "key", myGui.AddHotkey("x90 y515 w35 h20", "q"),
+        "enable", myGui.AddCheckbox("x130 y515 w45 h20", "启用"),
+        "interval", myGui.AddEdit("x200 y515 w40 h20", "3000")
+    )
+    uCtrl["forceMove"] := Map(
+        "text", myGui.AddText("x30 y545 w30 h20", "强移:"),
+        "key", myGui.AddHotkey("x90 y545 w35 h20", "f"),
+        "enable", myGui.AddCheckbox("x130 y545 w45 h20", "启用"),
+        "interval", myGui.AddEdit("x200 y545 w40 h20", "50")
+    )
+    uCtrl["ipPause"] := Map(
+        "text", myGui.AddText("x300 y70 w60 h20", "血条启停:"),
+        "enable", myGui.AddCheckbox("x360 y70 w50 h20")
+    )
+    uCtrl["dcPause"] := Map(
+        "text", myGui.AddText("x300 y100 w60 h20", "双击暂停:"),
+        "enable", myGui.AddCheckbox("x360 y100 w30 h20")
+    )
+    uCtrl["huoDun"] := Map(
+        "text", myGui.AddText("x30 y640 w60 h20", "火盾:"),
+        "key", myGui.AddHotkey("x70 y635 w35 h20", "2")
+    )
+    uCtrl["dianMao"] := Map(
+        "text", myGui.AddText("x110 y640 w60 h20", "电矛:"),
+        "key", myGui.AddHotkey("x150 y635 w35 h20", "1")
+    )
+    uCtrl["dianQiu"] := Map(
+        "text", myGui.AddText("x190 y640 w60 h20", "电球:"),
+        "key", myGui.AddHotkey("x230 y635 w35 h20", "e")
+    )
+    uCtrl["binDun"] := Map(
+        "text", myGui.AddText("x280 y640 w60 h20", "冰盾:"),
+        "key", myGui.AddHotkey("x320 y635 w35 h20", "3")
+    )
     ; 添加鼠标自动移动控件
     mouseAutoMove := {
         enable: myGui.AddCheckbox("x30 y605 w100 h20", "鼠标自动移动"),
         interval: myGui.AddEdit("x160 y605 w40 h20", "1000")
     }
     mouseAutoMove.enable.OnEvent("Click", ToggleMouseAutoMove)
-    
-    ; 定义法师技能及其属性名映射
-    mageSkills := [
-        {name: "火盾", key: "2", x: 70, prop: "huoDun"},
-        {name: "电矛", key: "1", x: 150, prop: "dianMao"},
-        {name: "电球", key: "e", x: 230, prop: "dianQiu"},
-        {name: "冰盾", key: "3", x: 320, prop: "binDun"}
-    ]
-    for skill in mageSkills {
-    myGui.AddText("x" (skill.x-40) " y640 w30 h20", skill.name ":")
-    propName := skill.prop
-    uCtrl.%propName% := { key: myGui.AddHotkey("x" skill.x " y635 w35 h20", skill.key) }
-}
 }
 
 /**
@@ -306,42 +309,63 @@ UpdateStatus(status, barText) {
 /**
  * 切换宏运行状态
  */
+/**
+ * 切换宏运行状态
+ */
 ToggleMacro(*) {
-    global isRunning, mouseAutoMoveEnabled, mouseAutoMove
+    global isRunning, mouseAutoMoveEnabled, mouseAutoMove, isPaused
 
     ; 确保完全停止所有定时器
     StopAllTimers()
     StopWindowCheckTimer()
     StopAutoPauseTimer()
     StopImagePauseTimer()
+    
     ; 切换运行状态
     isRunning := !isRunning
+    
     if isRunning {
+        ; 初始化暂停状态
+        for key, _ in isPaused {
+            isPaused[key] := false
+        }
+        
         ; 初始化窗口分辨率和技能位置
         GetDynamicSkillPositions()
+        
         ; 确保鼠标自动移动状态与GUI勾选框一致
         mouseAutoMoveEnabled := (mouseAutoMove.enable.Value = 1)
+        
+        ; 启动监控定时器
         StartWindowCheckTimer()
         StartAutoPauseTimer()
         StartImagePauseTimer()
+        
         ; 只有在暗黑4窗口激活时才启动定时器
         if WinActive("ahk_class Diablo IV Main Window Class") {
             StartAllTimers()
             UpdateStatus("运行中", "宏已启动")
         } else {
+            ; 如果窗口未激活，设置窗口暂停状态
+            isPaused["window"] := true
             UpdateStatus("已暂停(窗口切换)", "宏已暂停 - 窗口未激活")
         }
     } else {
+        ; 停止所有定时器
+        StopAllTimers()
         StopWindowCheckTimer()
         StopAutoPauseTimer()
         StopImagePauseTimer()
+        
+        ; 重置所有暂停状态
         for key, _ in isPaused {
             isPaused[key] := false
         }
-        UpdateStatus("已停止", "宏已停止")
-
+        
         ; 确保释放所有按键
         ReleaseAllKeys()
+        
+        UpdateStatus("已停止", "宏已停止")
     }
 
     DebugLog("宏状态切换: " . (isRunning ? "运行" : "停止"))
@@ -438,115 +462,90 @@ TogglePause(reason, state) {
 
 ; ==================== 定时器管理 ====================
 /**
- * 启动所有定时器
+ * 启动所有定时器（队列模式）
  */
 StartAllTimers() {
-    ; 先停止所有定时器，确保清理
     StopAllTimers()
-
-    ; 启动技能定时器
-    StartSkillTimers()
-
-    ; 启动鼠标和功能键定时器
-    StartUtilityTimers()
-
-    ; 启动鼠标自动移动定时器
-    StartMouseAutoMoveTimer()
-    DebugLog("所有定时器已启动")
+    StartKeyQueueTimers()
+    StartWindowCheckTimer()
+    StartAutoPauseTimer()
+    StartImagePauseTimer()
+    DebugLog("所有定时器已启动(队列模式)")
 }
 
 /**
- * 启动技能定时器
+ * 启动所有按键队列定时器
  */
-StartSkillTimers() {
-    global skillControls, boundSkillTimers, timerStates
+StartKeyQueueTimers() {
+    global keyQueue, keyQueueTimer, cSkill, mSkill, uCtrl
 
-    for i in [1, 2, 3, 4, 5] {
-        if (skillControls[i].enable.Value = 1) {
-            interval := Integer(skillControls[i].interval.Value)
+    keyQueue := []
+
+    ; 技能
+    for i in [1,2,3,4,5] {
+        if (cSkill[i].enable.Value = 1) {
+            interval := Integer(cSkill[i].interval.Value)
+                if (interval > 0) {
+                    EnqueueKey({
+                        id: "skill" i,
+                        func: (qItem) => PressSkill(qItem.skillIndex),
+                        skillIndex: i,
+                        interval: interval,
+                        nextFire: A_TickCount + interval
+                    })
+                }
+            }
+    }
+    ; 鼠标
+    if (mSkill.left.enable.Value = 1) {
+        interval := Integer(mSkill.left.interval.Value)
+        if (interval > 0) {
+            EnqueueKey({
+                id: "mouseLeft",
+                func: PressLeftClickQueue,
+                interval: interval,
+                nextFire: A_TickCount + interval
+            })
+        }
+    }
+    if (mSkill.right.enable.Value = 1) {
+        interval := Integer(mSkill.right.interval.Value)
+        if (interval > 0) {
+            EnqueueKey({
+                id: "mouseRight",
+                func: PressRightClickQueue,
+                interval: interval,
+                nextFire: A_TickCount + interval
+            })
+        }
+    }
+    for id, config in uCtrl {
+        if (config.Has("enable") && config.Has("interval") && config["enable"].Value = 1) {
+            interval := Integer(config["interval"].Value)
             if (interval > 0) {
-                boundSkillTimers[i] := PressSkill.Bind(i)
-                SetTimer(boundSkillTimers[i], interval)
-                timerStates[i] := true
-                DebugLog("启动技能" i "定时器，间隔: " interval)
+                EnqueueKey({
+                    id: id,
+                    func: (qItem) => PressuSkillKey(qItem.uSkillId),
+                    uSkillId: id,
+                    interval: interval,
+                    nextFire: A_TickCount + interval
+                })
             }
         }
-    }
-}
-
-/**
- * 启动鼠标和功能键定时器
- */
-StartUtilityTimers() {
-    StartSingleTimer("leftClick", mouseControls.left, PressLeftClick)
-    StartSingleTimer("rightClick", mouseControls.right, PressRightClick)
-    StartSingleTimer("dodge", uCtrl.dodge, PressDodge)
-    StartSingleTimer("potion", uCtrl.potion, PressPotion)
-    StartSingleTimer("forceMove", uCtrl.forceMove, PressForceMove)
-}
-
-/**
- * 启动鼠标自动移动定时器
- */
-StartMouseAutoMoveTimer() {
-    global mouseAutoMoveEnabled, mouseAutoMove, timerStates
-
-    DebugLog("鼠标自动移动状态: " . (mouseAutoMoveEnabled ? "启用" : "禁用") . ", GUI勾选状态: " . mouseAutoMove.enable.Value)
-
-    if (mouseAutoMoveEnabled) {
-        interval := Integer(mouseAutoMove.interval.Value)
-        if (interval > 0) {
-            SetTimer(MoveMouseToNextPoint, interval)
-            timerStates["mouseAutoMove"] := true
-            DebugLog("启动鼠标自动移动定时器 - 间隔: " interval)
-        }
-    }
-}
-
-/**
- * 启动单个定时器
- * @param {String} name - 定时器名称
- * @param {Object} control - 控件对象
- * @param {Function} timerFunc - 定时器函数
- */
-StartSingleTimer(name, control, timerFunc) {
-    global timerStates
-
-    if (control.enable.Value = 1) {
-        interval := Integer(control.interval.Value)
-        if (interval > 0) {
-            SetTimer(timerFunc, interval)
-            timerStates[name] := true
-            DebugLog("启动" name "定时器 - 间隔: " interval)
-        }
-    }
+    }   
+    ; 启动统一调度定时器（建议10ms轮询）
+    keyQueueTimer := SetTimer(KeyQueueDispatcher, 10)
 }
 
 /**
  * 停止所有定时器
  */
 StopAllTimers() {
-    global boundSkillTimers, timerStates
-    
-    ; 停止技能定时器
-    for i, timerFunc in boundSkillTimers {
-        SetTimer(timerFunc, 0)
-        timerStates.Delete(i)  ; 更新技能定时器状态
-    }
-    boundSkillTimers.Clear()
-
-    ; 停止所有定时器并更新状态
-    SetTimer PressLeftClick, 0  
-    SetTimer PressRightClick, 0   
-    SetTimer PressDodge, 0   
-    SetTimer PressPotion, 0   
-    SetTimer PressForceMove, 0  
-    SetTimer MoveMouseToNextPoint, 0
-    ; 清空所有定时器状态
-    timerStates.Clear()
+    global keyQueue, keyQueueTimer
+    SetTimer(KeyQueueDispatcher, 0)
+    keyQueue := []
     ; 释放所有按键
     ReleaseAllKeys()
-
     DebugLog("已停止所有定时器并释放按键")
 }
 
@@ -564,13 +563,128 @@ StopWindowCheckTimer() {
     SetTimer CheckWindow, 0
 }
 
+/**
+ * 启动自动战斗定时器
+ */
+StartImagePauseTimer() {
+    SetTimer AutoPauseByColor, 50
+}
+
+/**
+ * 停止自动战斗定时器
+ */
+StopImagePauseTimer() {
+    SetTimer AutoPauseByColor, 0
+}
+
+/**
+ * 启动特殊点检测定时器
+ */
+StartAutoPauseTimer() {
+    SetTimer(AutoPause, 100)
+    DebugLog("特殊点检测定时器已启动")
+}
+
+/**
+ * 停止特殊点检测定时器
+ */
+StopAutoPauseTimer() {
+    SetTimer(AutoPause, 0)
+    DebugLog("特殊点检测定时器已停止")
+}
+
+; ==================== 队列调度核心 ====================
+/**
+ * 按键队列调度器
+ */
+QuickSortByNextFire(arr, left := 1, right := unset) {
+    if !IsSet(right)
+        right := arr.Length
+    if (left >= right)
+        return
+    pivotObj := arr[left]
+    pivot := pivotObj.nextFire
+    i := left
+    j := right
+    while (i < j) {
+        while (i < j && arr[j].nextFire >= pivot)
+            j--
+        if (i < j)
+            arr[i] := arr[j]
+        while (i < j && arr[i].nextFire <= pivot)
+            i++
+        if (i < j)
+            arr[j] := arr[i]
+    }
+    arr[i] := pivotObj
+    QuickSortByNextFire(arr, left, i - 1)
+    QuickSortByNextFire(arr, i + 1, right)
+}
+
+KeyQueueDispatcher() {
+    global keyQueue, keyQueueLock, isRunning
+
+    if (!isRunning || keyQueue.Length = 0)
+        return
+
+    if (keyQueueLock)
+        return
+
+    keyQueueLock := true
+
+    now := A_TickCount
+
+    ; 快速排序 keyQueue
+    QuickSortByNextFire(keyQueue)
+
+    ; 遍历所有到时间的按键
+    for i, item in keyQueue {
+        if (item.nextFire <= now) {
+            try {
+                item.func.Call(item)
+            } catch as err {
+                DebugLog("队列调度器异常: " err.Message)
+            }
+            item.nextFire := now + item.interval
+        }
+    }
+
+    keyQueueLock := false
+}
+
+/**
+ * 添加/更新按键到队列
+ * @param {Object} item - {id, func, interval, nextFire, ...}
+ */
+EnqueueKey(item) {
+    global keyQueue
+    ; 检查是否已存在（用id唯一标识）
+    for i, v in keyQueue {
+        if (v.id = item.id) {
+            keyQueue[i] := item
+            return
+        }
+    }
+    keyQueue.Push(item)
+}
+
+/**
+ * 队列适配的按键处理函数
+ */
+PressLeftClickQueue(item) {
+    PressLeftClick()
+}
+PressRightClickQueue(item) {
+    PressRightClick()
+}
+
 ; ==================== 按键与技能处理 ====================
 /**
  * 通用按键处理
  * @param {String} keyOrBtn - 键名或鼠标按钮名
  * @param {Integer} mode - 模式编号
  * @param {Object} pos - BUFF检测坐标对象（可选）
- * @param {String} type - "key"、"mouse" 或 "utility"
+ * @param {String} type - "key"、"mouse" 或 "uSkill"
  * @param {String} mouseBtn - 鼠标按钮名（如"left"/"right"，仅type为mouse时用）
  * @param {String} description - 按键描述（用于日志）
  */
@@ -647,13 +761,13 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", descript
  * 技能按键处理
  */
 PressSkill(skillNum) {
-    global isRunning, skillControls, skillPositions
-    if (!isRunning || IsAnyPaused() || !skillControls[skillNum].enable.Value)
+    global isRunning, cSkill, skillPositions
+    if (!isRunning || IsAnyPaused() || !cSkill[skillNum].enable.Value)
         return
-    key := skillControls[skillNum].key.Value
+    key := cSkill[skillNum].key.Value
     if (key = "")
         return
-    mode := skillControls[skillNum].mode.Value
+    mode := cSkill[skillNum].mode.Value
     pos := skillPositions.Has(skillNum) ? skillPositions[skillNum] : ""
     HandleKeyMode(key, mode, pos, "key")
 }
@@ -662,10 +776,10 @@ PressSkill(skillNum) {
  * 鼠标左键处理
  */
 PressLeftClick() {
-    global isRunning, mouseControls, skillPositions
-    if (!isRunning || IsAnyPaused() || !mouseControls.left.enable.Value)
+    global isRunning, mSkill, skillPositions
+    if (!isRunning || IsAnyPaused() || !mSkill.left.enable.Value)
         return
-    mode := mouseControls.left.mode.Value
+    mode := mSkill.left.mode.Value
     pos := skillPositions.Has("left") ? skillPositions["left"] : ""
     HandleKeyMode("left", mode, pos, "mouse", "left")
 }
@@ -674,59 +788,41 @@ PressLeftClick() {
  * 鼠标右键处理
  */
 PressRightClick() {
-    global isRunning, mouseControls, skillPositions
-    if (!isRunning || IsAnyPaused() || !mouseControls.right.enable.Value)
+    global isRunning, mSkill, skillPositions
+    if (!isRunning || IsAnyPaused() || !mSkill.right.enable.Value)
         return
-    mode := mouseControls.right.mode.Value
+    mode := mSkill.right.mode.Value
     pos := skillPositions.Has("right") ? skillPositions["right"] : ""
     HandleKeyMode("right", mode, pos, "mouse", "right")
 }
 
 /**
- * 按下空格键(空格)
+ * 功能键队列处理函数
+ * @param {String} uSkillId - 功能键ID
  */
-PressDodge() {
+PressuSkillKey(uSkillId) {
     global isRunning, uCtrl
-
-    if (!isRunning || IsAnyPaused() || uCtrl.dodge.enable.Value != 1)
+    
+    if (!isRunning || IsAnyPaused())
         return
-    ; 空格键总是使用连点模式
-    HandleKeyMode("Space", SKILL_MODE_CLICK, "", "key", "", "空格键")
-}
 
-/**
- * 按下喝药键
- */
-PressPotion() {
-    global isRunning, uCtrl
-
-    if (!isRunning || IsAnyPaused() || uCtrl.potion.enable.Value != 1)
+    ; 检查功能键是否存在于 uCtrl 中
+    if (!uCtrl.Has(uSkillId)) {
+        DebugLog("功能键未定义: " uSkillId)
         return
-    key := uCtrl.potion.key.Value
-    if (key != "") {
-        HandleKeyMode(key, SKILL_MODE_CLICK, "", "key", "", "喝药键")
+    }
+
+    ; 获取功能键配置
+    config := uCtrl[uSkillId]
+
+    ; 检查功能键是否启用
+    if (config.Has("enable") && config["enable"].Value = 1) {
+        key := config.Has("key") ? config["key"].Value : ""
+        if (key != "") {
+            HandleKeyMode(key, SKILL_MODE_CLICK, "", "key", "", uSkillId)
+        }
     }
 }
-
-/**
- * 按下强制移动键
- */
-PressForceMove() {
-    global isRunning, uCtrl
-
-    if (!isRunning || IsAnyPaused() || uCtrl.forceMove.enable.Value != 1)
-        return
-    key := uCtrl.forceMove.key.Value
-    if (key != "") {
-        HandleKeyMode(key, SKILL_MODE_CLICK, "", "key", "", "强制移动键")
-    }
-}
-
-/**
- * 发送按键
- * @param {String} key - 要发送的按键
- */
-
 /**
  * shift按键发送函数
  * @param {String} key - 要发送的按键
@@ -1007,7 +1103,7 @@ CheckPauseByColor(res := unset, pixelCache := unset) {
  */
 AutoPauseByColor() {
     global isRunning, isPaused, uCtrl
-    if (!isRunning || uCtrl.ipMode.enable.Value != 1)
+    if (!isRunning || uCtrl["ipPause"]["enable"].Value != 1)
         return
 
     ; 统一采样血条检测点
@@ -1081,36 +1177,6 @@ AutoPause() {
             }
         }
     }
-}
-
-/**
- * 启动自动战斗定时器
- */
-StartImagePauseTimer() {
-    SetTimer AutoPauseByColor, 50
-}
-
-/**
- * 停止自动战斗定时器
- */
-StopImagePauseTimer() {
-    SetTimer AutoPauseByColor, 0
-}
-
-/**
- * 启动特殊点检测定时器
- */
-StartAutoPauseTimer() {
-    SetTimer(AutoPause, 100)
-    DebugLog("特殊点检测定时器已启动")
-}
-
-/**
- * 停止特殊点检测定时器
- */
-StopAutoPauseTimer() {
-    SetTimer(AutoPause, 0)
-    DebugLog("特殊点检测定时器已停止")
 }
 
 /**
@@ -1445,7 +1511,7 @@ SaveSettings(settingsFile := "", profileName := "默认") {
         ; 保存各类设置
         SaveSkillSettings(settingsFile, profileName)
         SaveMouseSettings(settingsFile, profileName)
-        SaveUtilitySettings(settingsFile, profileName)
+        SaveuSkillSettings(settingsFile, profileName)
         LoadGlobalHotkey()
 
         statusBar.Text := "设置已保存"
@@ -1462,16 +1528,16 @@ SaveSettings(settingsFile := "", profileName := "默认") {
  * @param {String} profileName - 配置方案名称
  */
 SaveSkillSettings(file, profileName) {
-    global skillControls
+    global cSkill
     section := profileName "_Skills"
 
     for i in [1, 2, 3, 4, 5] {
-        IniWrite(skillControls[i].key.Value, file, section, "Skill" i "Key")
-        IniWrite(skillControls[i].enable.Value, file, section, "Skill" i "Enable")
-        IniWrite(skillControls[i].interval.Value, file, section, "Skill" i "Interval")
+        IniWrite(cSkill[i].key.Value, file, section, "Skill" i "Key")
+        IniWrite(cSkill[i].enable.Value, file, section, "Skill" i "Enable")
+        IniWrite(cSkill[i].interval.Value, file, section, "Skill" i "Interval")
 
         ; 获取下拉框选择的索引并保存
-        modeIndex := skillControls[i].mode.Value
+        modeIndex := cSkill[i].mode.Value
         IniWrite(modeIndex, file, section, "Skill" i "Mode")
         DebugLog("保存技能" i "模式: " modeIndex)
     }
@@ -1483,20 +1549,20 @@ SaveSkillSettings(file, profileName) {
  * @param {String} profileName - 配置方案名称
  */
 SaveMouseSettings(file, profileName) {
-    global mouseControls, mouseAutoMove
+    global mSkill, mouseAutoMove
     section := profileName "_Mouse"
 
     ; 保存左键设置
-    IniWrite(mouseControls.left.enable.Value, file, section, "LeftClickEnable")
-    IniWrite(mouseControls.left.interval.Value, file, section, "LeftClickInterval")
-    leftModeIndex := mouseControls.left.mode.Value
+    IniWrite(mSkill.left.enable.Value, file, section, "LeftClickEnable")
+    IniWrite(mSkill.left.interval.Value, file, section, "LeftClickInterval")
+    leftModeIndex := mSkill.left.mode.Value
     IniWrite(leftModeIndex, file, section, "LeftClickMode")
     DebugLog("保存左键模式: " leftModeIndex)
 
     ; 保存右键设置
-    IniWrite(mouseControls.right.enable.Value, file, section, "RightClickEnable")
-    IniWrite(mouseControls.right.interval.Value, file, section, "RightClickInterval")
-    rightModeIndex := mouseControls.right.mode.Value
+    IniWrite(mSkill.right.enable.Value, file, section, "RightClickEnable")
+    IniWrite(mSkill.right.interval.Value, file, section, "RightClickInterval")
+    rightModeIndex := mSkill.right.mode.Value
     IniWrite(rightModeIndex, file, section, "RightClickMode")
     DebugLog("保存右键模式: " rightModeIndex)
 
@@ -1510,26 +1576,46 @@ SaveMouseSettings(file, profileName) {
  * @param {String} file - 设置文件路径
  * @param {String} profileName - 配置方案名称
  */
-SaveUtilitySettings(file, profileName) {
+SaveuSkillSettings(file, profileName) {
     global uCtrl, hotkeyControl, sleepInput
-    section := profileName "_Utility"
+    section := profileName "_uSkill"
 
-    IniWrite(uCtrl.dodge.enable.Value, file, section, "DodgeEnable")
-    IniWrite(uCtrl.dodge.interval.Value, file, section, "DodgeInterval")
-    IniWrite(uCtrl.potion.key.Value, file, section, "PotionKey")
-    IniWrite(uCtrl.potion.enable.Value, file, section, "PotionEnable")
-    IniWrite(uCtrl.potion.interval.Value, file, section, "PotionInterval")
-    IniWrite(uCtrl.forceMove.key.Value, file, section, "ForceMoveKey")
-    IniWrite(uCtrl.forceMove.enable.Value, file, section, "ForceMoveEnable")
-    IniWrite(uCtrl.forceMove.interval.Value, file, section, "ForceMoveInterval")
-    IniWrite(uCtrl.huoDun.key.Value, file, section, "HuoDunKey")
-    IniWrite(uCtrl.dianMao.key.Value, file, section, "DianMaoKey")
-    IniWrite(uCtrl.dianQiu.key.Value, file, section, "DianQiuKey")
-    IniWrite(uCtrl.binDun.key.Value, file, section, "BinDunKey")
+    ; 保存功能键（喝药、强移、闪避）
+    if (uCtrl.Has("dodge")) {
+        IniWrite(uCtrl["dodge"]["key"].Value, file, section, "DodgeKey")
+        IniWrite(uCtrl["dodge"]["enable"].Value, file, section, "DodgeEnable")
+        IniWrite(uCtrl["dodge"]["interval"].Value, file, section, "DodgeInterval")
+    }
+    
+    if (uCtrl.Has("potion")) {
+        IniWrite(uCtrl["potion"]["key"].Value, file, section, "PotionKey")
+        IniWrite(uCtrl["potion"]["enable"].Value, file, section, "PotionEnable")
+        IniWrite(uCtrl["potion"]["interval"].Value, file, section, "PotionInterval")
+    }
+    
+    if (uCtrl.Has("forceMove")) {
+        IniWrite(uCtrl["forceMove"]["key"].Value, file, section, "ForceMoveKey")
+        IniWrite(uCtrl["forceMove"]["enable"].Value, file, section, "ForceMoveEnable")
+        IniWrite(uCtrl["forceMove"]["interval"].Value, file, section, "ForceMoveInterval")
+    }
+    
+    ; 保存其他设置
+    IniWrite(uCtrl["ipPause"]["enable"].Value, file, section, "IpPauseEnable")
+    IniWrite(uCtrl["dcPause"]["enable"].Value, file, section, "DcPauseEnable")
+    
+    ; 保存法师技能设置
+    IniWrite(uCtrl["huoDun"]["key"].Value, file, section, "HuoDunKey")
+    IniWrite(uCtrl["dianMao"]["key"].Value, file, section, "DianMaoKey")
+    IniWrite(uCtrl["dianQiu"]["key"].Value, file, section, "DianQiuKey")
+    IniWrite(uCtrl["binDun"]["key"].Value, file, section, "BinDunKey")
+
+    ; 保存BUFF阈值和卡快照延迟
+    IniWrite(buffThreshold.Value, file, section, "BuffThreshold")
     IniWrite(sleepInput.Value, file, section, "SnapSleepDelay")
-    IniWrite(uCtrl.dcPause.enable.Value, file, section, "DcPauseEnable")
-    IniWrite(uCtrl.ipMode.enable.Value, file, section, "IpModeEnable")
+    
+    ; 保存全局热键
     IniWrite(hotkeyControl.Value, file, section, "StartStopKey")
+    
 }
 
 /**
@@ -1549,7 +1635,7 @@ LoadSettings(settingsFile := "", profileName := "默认") {
         ; 加载各类设置
         LoadSkillSettings(settingsFile, profileName)
         LoadMouseSettings(settingsFile, profileName)
-        LoadUtilitySettings(settingsFile, profileName)
+        LoaduSkillSettings(settingsFile, profileName)
         
         ; 每个配置都应用自己的热键和自动启停
         LoadGlobalHotkey()
@@ -1558,7 +1644,7 @@ LoadSettings(settingsFile := "", profileName := "默认") {
         DebugLog("加载设置出错: " err.Message)
     }
 
-    DebugLog("自动启停模式已同步: " uCtrl.ipMode.enable.Value)
+    DebugLog("自动启停模式已同步: " uCtrl["dcPause"]["enable"].Value)
 }
 /**
  * 加载技能设置
@@ -1566,7 +1652,7 @@ LoadSettings(settingsFile := "", profileName := "默认") {
  * @param {String} profileName - 配置方案名称
  */
 LoadSkillSettings(file, profileName) {
-    global skillControls, SKILL_MODE_CLICK
+    global cSkill, SKILL_MODE_CLICK
     section := profileName "_Skills"
 
     Loop 5 {
@@ -1576,9 +1662,9 @@ LoadSkillSettings(file, profileName) {
             interval := IniRead(file, section, "Skill" A_Index "Interval", 20)
             mode := Integer(IniRead(file, section, "Skill" A_Index "Mode", SKILL_MODE_CLICK))
 
-            skillControls[A_Index].key.Value := key
-            skillControls[A_Index].enable.Value := enabled
-            skillControls[A_Index].interval.Value := interval
+            cSkill[A_Index].key.Value := key
+            cSkill[A_Index].enable.Value := enabled
+            cSkill[A_Index].interval.Value := interval
 
             ; 设置模式下拉框
             try {
@@ -1586,19 +1672,19 @@ LoadSkillSettings(file, profileName) {
                 if (mode >= 1 && mode <= 3) {
                     ; 直接设置Text属性而不是使用Choose方法
                     if (mode == 1)
-                        skillControls[A_Index].mode.Text := "连点"
+                        cSkill[A_Index].mode.Text := "连点"
                     else if (mode == 2)
-                        skillControls[A_Index].mode.Text := "BUFF"
+                        cSkill[A_Index].mode.Text := "BUFF"
                     else if (mode == 3)
-                        skillControls[A_Index].mode.Text := "按住"
+                        cSkill[A_Index].mode.Text := "按住"
 
                     DebugLog("成功设置技能" A_Index "模式为: " mode)
                 } else {
-                    skillControls[A_Index].mode.Text := "连点"
+                    cSkill[A_Index].mode.Text := "连点"
                     DebugLog("技能" A_Index "模式值无效: " mode "，使用默认连点模式")
                 }
             } catch as err {
-                skillControls[A_Index].mode.Text := "连点"
+                cSkill[A_Index].mode.Text := "连点"
                 DebugLog("设置技能" A_Index "模式出错: " err.Message "，使用默认连点模式")
             }
         } catch as err {
@@ -1613,18 +1699,18 @@ LoadSkillSettings(file, profileName) {
  * @param {String} profileName - 配置方案名称
  */
 LoadMouseSettings(file, profileName) {
-    global mouseControls, mouseAutoMove, mouseAutoMoveEnabled, SKILL_MODE_CLICK
+    global mSkill, mouseAutoMove, mouseAutoMoveEnabled, SKILL_MODE_CLICK
     section := profileName "_Mouse"
 
     try {
         ; 加载左键设置
-        mouseControls.left.enable.Value := IniRead(file, section, "LeftClickEnable", 0)
-        mouseControls.left.interval.Value := IniRead(file, section, "LeftClickInterval", 80)
+        mSkill.left.enable.Value := IniRead(file, section, "LeftClickEnable", 0)
+        mSkill.left.interval.Value := IniRead(file, section, "LeftClickInterval", 80)
         leftMode := Integer(IniRead(file, section, "LeftClickMode", SKILL_MODE_CLICK))
 
         ; 加载右键设置
-        mouseControls.right.enable.Value := IniRead(file, section, "RightClickEnable", 1)
-        mouseControls.right.interval.Value := IniRead(file, section, "RightClickInterval", 300)
+        mSkill.right.enable.Value := IniRead(file, section, "RightClickEnable", 1)
+        mSkill.right.interval.Value := IniRead(file, section, "RightClickInterval", 300)
         rightMode := Integer(IniRead(file, section, "RightClickMode", SKILL_MODE_CLICK))
 
         ; 加载自动移动设置
@@ -1638,19 +1724,19 @@ LoadMouseSettings(file, profileName) {
             if (leftMode >= 1 && leftMode <= 3) {
                 ; 直接设置Text属性而不是使用Choose方法
                 if (leftMode == 1)
-                    mouseControls.left.mode.Text := "连点"
+                    mSkill.left.mode.Text := "连点"
                 else if (leftMode == 2)
-                    mouseControls.left.mode.Text := "BUFF"
+                    mSkill.left.mode.Text := "BUFF"
                 else if (leftMode == 3)
-                    mouseControls.left.mode.Text := "按住"
+                    mSkill.left.mode.Text := "按住"
 
                 DebugLog("成功设置左键模式为: " leftMode)
             } else {
-                mouseControls.left.mode.Text := "连点"
+                mSkill.left.mode.Text := "连点"
                 DebugLog("左键模式值无效: " leftMode "，使用默认连点模式")
             }
         } catch as err {
-            mouseControls.left.mode.Text := "连点"
+            mSkill.left.mode.Text := "连点"
             DebugLog("设置左键模式出错: " err.Message "，使用默认连点模式")
         }
 
@@ -1660,19 +1746,19 @@ LoadMouseSettings(file, profileName) {
             if (rightMode >= 1 && rightMode <= 3) {
                 ; 直接设置Text属性而不是使用Choose方法
                 if (rightMode == 1)
-                    mouseControls.right.mode.Text := "连点"
+                    mSkill.right.mode.Text := "连点"
                 else if (rightMode == 2)
-                    mouseControls.right.mode.Text := "BUFF"
+                    mSkill.right.mode.Text := "BUFF"
                 else if (rightMode == 3)
-                    mouseControls.right.mode.Text := "按住"
+                    mSkill.right.mode.Text := "按住"
 
                 DebugLog("成功设置右键模式为: " rightMode)
             } else {
-                mouseControls.right.mode.Text := "连点"
+                mSkill.right.mode.Text := "连点"
                 DebugLog("右键模式值无效: " rightMode "，使用默认连点模式")
             }
         } catch as err {
-            mouseControls.right.mode.Text := "连点"
+            mSkill.right.mode.Text := "连点"
             DebugLog("设置右键模式出错: " err.Message "，使用默认连点模式")
         }
 
@@ -1687,27 +1773,53 @@ LoadMouseSettings(file, profileName) {
  * @param {String} file - 设置文件路径
  * @param {String} profileName - 配置方案名称
  */
-LoadUtilitySettings(file, profileName) {
+LoaduSkillSettings(file, profileName) {
     global uCtrl, hotkeyControl, sleepInput
-    section := profileName "_Utility"
+    section := profileName "_uSkill"
 
     try {
-        uCtrl.dodge.enable.Value := IniRead(file, section, "DodgeEnable", 0)
-        uCtrl.dodge.interval.Value := IniRead(file, section, "DodgeInterval", 20)
-        uCtrl.potion.key.Value := IniRead(file, section, "PotionKey", "q")
-        uCtrl.potion.enable.Value := IniRead(file, section, "PotionEnable", 0)
-        uCtrl.potion.interval.Value := IniRead(file, section, "PotionInterval", 3000)
-        uCtrl.forceMove.key.Value := IniRead(file, section, "ForceMoveKey", "f")
-        uCtrl.forceMove.enable.Value := IniRead(file, section, "ForceMoveEnable", 0)
-        uCtrl.forceMove.interval.Value := IniRead(file, section, "ForceMoveInterval", 50)
-        uCtrl.huoDun.key.Value := IniRead(file, section, "HuoDunKey", "2")
-        uCtrl.dianMao.key.Value := IniRead(file, section, "DianMaoKey", "1")
-        uCtrl.dianQiu.key.Value := IniRead(file, section, "DianQiuKey", "e")
-        uCtrl.binDun.key.Value := IniRead(file, section, "BinDunKey", "3")
-        uCtrl.dcPause.enable.Value := IniRead(file, section, "DcPauseEnable", 1)
-        uCtrl.ipMode.enable.Value := IniRead(file, section, "IpModeEnable", 1)
-        sleepInput.Value := IniRead(file, section, "SnapSleepDelay", 2700)
+        ; 加载闪避设置
+        if (uCtrl.Has("dodge")) {
+            uCtrl["dodge"]["key"].Value := IniRead(file, section, "DodgeKey", "Space")
+            uCtrl["dodge"]["enable"].Value := IniRead(file, section, "DodgeEnable", "0")
+            uCtrl["dodge"]["interval"].Value := IniRead(file, section, "DodgeInterval", "20")
+        }
+        
+        ; 加载喝药设置
+        if (uCtrl.Has("potion")) {
+            uCtrl["potion"]["key"].Value := IniRead(file, section, "PotionKey", "q")
+            uCtrl["potion"]["enable"].Value := IniRead(file, section, "PotionEnable", "0")
+            uCtrl["potion"]["interval"].Value := IniRead(file, section, "PotionInterval", "3000")
+        }
+        
+        ; 加载强移设置
+        if (uCtrl.Has("forceMove")) {
+            uCtrl["forceMove"]["key"].Value := IniRead(file, section, "ForceMoveKey", "f")
+            uCtrl["forceMove"]["enable"].Value := IniRead(file, section, "ForceMoveEnable", "0")
+            uCtrl["forceMove"]["interval"].Value := IniRead(file, section, "ForceMoveInterval", "50")
+        }
+        
+        ; 加载其他设置
+        uCtrl["ipPause"]["enable"].Value := IniRead(file, section, "IpPauseEnable", "1")
+        uCtrl["dcPause"]["enable"].Value := IniRead(file, section, "DcPauseEnable", "1")
+        
+        ; 加载法师技能设置
+        uCtrl["huoDun"]["key"].Value := IniRead(file, section, "HuoDunKey", "2")
+        uCtrl["dianMao"]["key"].Value := IniRead(file, section, "DianMaoKey", "1")
+        uCtrl["dianQiu"]["key"].Value := IniRead(file, section, "DianQiuKey", "e")
+        uCtrl["binDun"]["key"].Value := IniRead(file, section, "BinDunKey", "3")
+
+        ; 加载BUFF阈值和卡快照延迟
+        thresholdValue := IniRead(file, section, "BuffThreshold", "100")
+        buffThreshold.Value := thresholdValue
+        buffThresholdValue.Text := thresholdValue
+        
+        sleepInput.Value := IniRead(file, section, "SnapSleepDelay", "2700")
+        
+        ; 加载全局热键
         hotkeyControl.Value := IniRead(file, section, "StartStopKey", "F1")
+        
+        DebugLog("成功加载功能键设置")
     } catch as err {
         DebugLog("加载功能键设置出错: " err.Message)
     }
@@ -1716,18 +1828,26 @@ LoadUtilitySettings(file, profileName) {
 /**
  * 加载全局热键
  */
+/**
+ * 加载全局热键
+ */
 LoadGlobalHotkey() {
-    global currentHotkey, hotkeyControl, myGui
+    global currentHotkey, hotkeyControl, statusBar
     
-    ; 跳过初始化时的空值
-    if (hotkeyControl.Value = "")
+    ; 处理空热键值
+    if (hotkeyControl.Value = "") {
+        ; 将热键恢复为之前的值或默认值
+        hotkeyControl.Value := currentHotkey ? currentHotkey : "F1"
+        statusBar.Text := "热键不能为空，已恢复为: " hotkeyControl.Value
+        DebugLog("热键为空，已恢复为: " hotkeyControl.Value)
         return
+    }
     
     try {
         ; 移除旧热键绑定
         if (currentHotkey != "") {
             Hotkey(currentHotkey, ToggleMacro, "Off")
-                DebugLog("已解除旧热键: " currentHotkey)
+            DebugLog("已解除旧热键: " currentHotkey)
         }
         
         ; 获取并验证新热键
@@ -1738,20 +1858,24 @@ LoadGlobalHotkey() {
         currentHotkey := newHotkey
         DebugLog("成功注册热键: " newHotkey)  
         ; 更新状态栏
-        myGui.statusBar.Text := "热键已更新: " newHotkey
+        statusBar.Text := "热键已更新: " newHotkey
+    } catch as err {
+        ; 处理热键注册失败的情况
+        hotkeyControl.Value := currentHotkey ? currentHotkey : "F1"
+        statusBar.Text := "热键设置失败: " err.Message
+        DebugLog("热键设置失败: " err.Message)
     }
 }
-
 
 ; ==================== 热键处理 ====================
 #HotIf WinActive("ahk_class Diablo IV Main Window Class")
 
 F3::{
     ; 确保从配置对象获取最新值
-    dianQiuKey := uCtrl.dianQiu.key.Value
-    huoDunKey := uCtrl.huoDun.key.Value
-    dianMaoKey := uCtrl.dianMao.key.Value
-    binDunKey := uCtrl.binDun.key.Value
+    dianQiuKey := uCtrl["dianQiu"]["key"].Value
+    huoDunKey := uCtrl["huoDun"]["key"].Value
+    dianMaoKey := uCtrl["dianMao"]["key"].Value
+    binDunKey := uCtrl["binDun"]["key"].Value
     ; 获取延迟值
     sleepD := Integer(sleepInput.Value)
     ; 验证范围
@@ -1783,15 +1907,15 @@ F3::{
     global isRunning, uCtrl, isPaused
     static lastClickTime := 0
 
-    if (!isRunning || uCtrl.dcPause.enable.Value != 1)
+    if (!isRunning || !uCtrl.Has("dcPause") || !uCtrl["dcPause"].Has("enable") || uCtrl["dcPause"]["enable"].Value != 1)
         return
         
     currentTime := A_TickCount
     
     if (currentTime - lastClickTime < 400) {
+        DebugLog("检测到双击，暂停宏2秒")
         TogglePause("doubleClick", true)
         SetTimer(() => TogglePause("doubleClick", false), -2000)
-        
         lastClickTime := 0
     } else {
         lastClickTime := currentTime
