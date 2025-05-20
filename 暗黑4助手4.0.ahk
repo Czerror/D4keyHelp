@@ -79,7 +79,13 @@ InitializeGUI() {
     myGui := Gui("", "暗黑4助手 v4.0")
     myGui.BackColor := "FFFFFF"
     myGui.SetFont("s10", "Microsoft YaHei UI")
-    
+    A_TrayMenu.Delete()
+    A_TrayMenu.Add("显示主界面", (*) => myGui.Show())
+    A_TrayMenu.Add()
+    A_TrayMenu.Add("开始/停止宏", ToggleMacro)
+    A_TrayMenu.Add()
+    A_TrayMenu.Add("退出", (*) => ExitApp())
+    A_TrayMenu.Default := "显示主界面"     
     ; 关闭窗口时保存设置并退出
     myGui.OnEvent("Close", (*) => (
         SaveSettings(),   ; 关闭窗口时自动保存设置
@@ -440,6 +446,7 @@ StartAllTimers() {
     global cSkill, mSkill, uCtrl, skillTimers, RunMod
     ; 清空之前的定时器
     StopAllTimers()
+    GetDynamicbSkill()
     if (RunMod.Value = 1) {
         Loop 5 {
             skillIndex := A_Index
@@ -462,30 +469,39 @@ StartAllTimers() {
         if (uCtrl["forceMove"]["enable"].Value) {
             PressuSkillKey("forceMove")
         }
-        StartAutoMove()
     } else if (RunMod.Value = 2) {
         keyQueue := []
         keyQueueLastExec := Map()
         FillKeyQueue()
         SetTimer(KeyQueueWorker, 5)
     }
+    StartAutoMove()
 }
 /**
  * 停止所有定时器
  */
 StopAllTimers() {
-    global skillTimers
-    ; 停止所有定时器
+    global skillTimers, RunMod, keyQueue, keyQueueLastExec, bSkill
+    
+    ; 定时器Map的直接清空方法 - 先停止所有定时器再清空Map
     for timerName, boundFunc in skillTimers {
         SetTimer(boundFunc, 0)
     }
-    if (RunMod.Value = 2) {
+    ; 处理单线程模式的队列定时器
+    if (RunMod && RunMod.Value = 2) {
         SetTimer(KeyQueueWorker, 0)
         keyQueue := []
         keyQueueLastExec := Map()
-    }           
+    }
+    ; 一次性清空映射
+    skillTimers := Map()
+    bSkill := Map()
+    ; 停止可能的自动移动定时器
+    StartAutoMove()
+    SetTimer(MoveMouseToNextPoint, 0)
+    
     ; 释放所有按键
-    ReleaseAllKeys()
+    ReleaseAllKeys() 
 }
 /**
  * 管理全局定时器
