@@ -12,7 +12,7 @@ global isPaused := Map(
     "enter", false,  ; Enter键检测
     "tab", false,  ; 界面检测
     "blood", false      ; 血条检测
-)                                   ; 暂停状态映射 
+)                                   ; 暂停状态映射
 global currentHotkey := "F1"       ; 当前热键
 ; GUI相关变量
 global myGui := ""                 ; 主GUI对象
@@ -74,7 +74,7 @@ DebugLog(message) {
  */
 InitializeGUI() {
     global myGui, statusBar
-    
+
     ; 创建主GUI窗口
     myGui := Gui("", "暗黑4助手 v4.0")
     myGui.BackColor := "FFFFFF"
@@ -85,23 +85,23 @@ InitializeGUI() {
     A_TrayMenu.Add("开始/停止宏", ToggleMacro)
     A_TrayMenu.Add()
     A_TrayMenu.Add("退出", (*) => ExitApp())
-    A_TrayMenu.Default := "显示主界面"   
+    A_TrayMenu.Default := "显示主界面"
     ; 按下Escape键时最小化窗口而不是退出
     myGui.OnEvent("Escape", (*) => myGui.Minimize())
     ; 创建所有控件 - 主界面、配置管理、按键设置等
     CreateMainGUI()
     CreateAllControls()
-    
+
     ; 添加状态栏
     statusBar := myGui.AddStatusBar(, "就绪")
-    
+
     ; 显示GUI
     myGui.Show("w480 h770")
-    
+
     ; 初始化配置方案列表
     InitializeProfiles()
     myGui.OnEvent("Close", (*) => ExitApp())
-    
+
 }
 
 /**
@@ -110,7 +110,7 @@ InitializeGUI() {
 CreateMainGUI() {
     global myGui, statusText, hotkeyControl, currentProfileName, RunMod
     global profileDropDown, profileNameInput, buffThreshold, buffThresholdValue, sleepInput
-    
+
     ; ----- 主区域 -----
     myGui.AddGroupBox("x10 y10 w460 h120", "F3: 卡快照")
     statusText := myGui.AddText("x30 y35 w400 h20", "状态: 未运行")
@@ -124,7 +124,8 @@ CreateMainGUI() {
     RunMod := myGui.AddDropDownList("x300 y70 w65 h60 Choose1", ["多线程", "单线程"])
     RunMod.OnEvent("Change", (*) => (
         ; 如果宏正在运行，切换模式时重启定时器
-        (isRunning && (StopAllTimers(), StartAllTimers()))
+        (isRunning && (StopAllTimers(), StartAllTimers())
+        )
         (RunMod.Value = 2 && FillKeyQueue()), ; 切换到单线程时刷新队列
         UpdateStatus("", "宏已切换模式")
     ))
@@ -136,22 +137,22 @@ CreateMainGUI() {
     profileNameInput := myGui.AddEdit("x270 y155 w100 h25", currentProfileName)
     myGui.AddButton("x375 y155 w40 h25", "保存").OnEvent("Click", SaveProfile)
     myGui.AddButton("x420 y155 w40 h25", "删除").OnEvent("Click", DeleteProfile)
-    
+
     ; ----- BUFF检测区 -----
     myGui.AddText("x30 y245", "BUFF检测阈值:")
     buffThreshold := myGui.AddSlider("x120 y245 w100 Range50-200", 100)
     buffThresholdValue := myGui.AddText("x220 y245 w30 h20", buffThreshold.Value)
     buffThreshold.OnEvent("Change", (ctrl, *) => buffThresholdValue.Text := ctrl.Value)
-    
+
     ; ----- 按键设置区域 -----
     myGui.AddGroupBox("x10 y210 w460 h370", "按键设置")
-    
+
     ; ----- 快照设置区域 -----
     myGui.AddGroupBox("x10 y590 w460 h55", "快照设置")
     myGui.AddText("x300 y620 w60 h20", "快照延迟:")
     sleepInput := myGui.AddEdit("x360 y615 w40 h20", "2700")
     sleepInput.OnEvent("LoseFocus", ValidateSleepInput)
-    
+
     ; ----- 自动启停区域 -----
     myGui.AddGroupBox("x10 y655 w460 h80", "自动启停管理")
     myGui.AddText("x30 y710 w50 h20", "灵敏度:")
@@ -166,17 +167,17 @@ CreateAllControls() {
     cSkill := Map()
     mSkill := Map()
     uCtrl := Map()
-    Loop 5 {
-        yPos := 280 + (A_Index-1) * 30
+    loop 5 {
+        yPos := 280 + (A_Index - 1) * 30
         myGui.AddText("x30 y" yPos " w40 h20", "技能" A_Index ":")
-        cSkill[A_Index] := {
-            key: myGui.AddHotkey("x90 y" yPos " w30 h20", A_Index),
-            enable: myGui.AddCheckbox("x130 y" yPos " w45 h20", "启用"),
-            interval: myGui.AddEdit("x200 y" yPos " w40 h20", "20"),
-            mode: myGui.AddDropDownList("x270 y" yPos " w60 h120 Choose1", skillMod)
-        }
+        cSkill[A_Index] := Map(
+            "key", myGui.AddHotkey("x90 y" yPos " w30 h20", A_Index),
+            "enable", myGui.AddCheckbox("x130 y" yPos " w45 h20", "启用"),
+            "interval", myGui.AddEdit("x200 y" yPos " w40 h20", "20"),
+            "mode", myGui.AddDropDownList("x270 y" yPos " w60 h120 Choose1", skillMod)
+        )
         ; 添加ms文本标签
-    myGui.AddText("x240 y" yPos+5 " w20 h15", "ms")
+        myGui.AddText("x240 y" yPos + 5 " w20 h15", "ms")
     }
 
     ; === 创建鼠标控件 ===
@@ -193,8 +194,8 @@ CreateAllControls() {
     myGui.AddText("x30 y430 w40 h20", "左键:")
     myGui.AddText("x30 y460 w40 h20", "右键:")
     ; 添加ms标签
-    Loop 5 {
-        yPos := 435 + (A_Index-1) * 30
+    loop 5 {
+        yPos := 435 + (A_Index - 1) * 30
         myGui.AddText("x240 y" yPos " w20 h15", "ms")
     }
     ; === 创建控件 ===
@@ -270,21 +271,23 @@ CreateAllControls() {
         "interval", myGui.AddEdit("x380 y545 w40 h20", "1000"),
         "currentPoint", 1
     )
-    ValidateRange(ctrl, min := 1, max := 9) {
-        try val := Integer(ctrl.Value)
-        catch
-            val := min
-        if (val < min)
-            ctrl.Value := min
-        else if (val > max)
-            ctrl.Value := max
-    }
 
-    for ctrl in [uCtrl["ipPause"]["pauseConfirm"], uCtrl["ipPause"]["resumeConfirm"], uCtrl["tabPause"]["pauseConfirm"], uCtrl["tabPause"]["resumeConfirm"]] {
-        ctrl.OnEvent("LoseFocus", (c,*) => ValidateRange(c))
+    for ctrl in [uCtrl["ipPause"]["pauseConfirm"], uCtrl["ipPause"]["resumeConfirm"],
+        uCtrl["tabPause"]["pauseConfirm"], uCtrl["tabPause"]["resumeConfirm"]] {
+        ctrl.OnEvent("LoseFocus", (c, *) => ValidateRange(c))
+        ; 可以考虑添加Change事件实时验证
+        ; ctrl.OnEvent("Change", (c,*) => ValidateRange(c))
     }
 }
-
+ValidateRange(ctrl, min := 1, max := 9) {
+    try val := Integer(ctrl.Value)
+    catch
+        val := min
+    if (val < min)
+        ctrl.Value := min
+    else if (val > max)
+        ctrl.Value := max
+}
 /**
  * 更新卡快照延迟
  */
@@ -332,10 +335,10 @@ ToggleMacro(*) {
     ; 确保完全停止所有定时器
     StopAllTimers()
     ManageTimers("none", false) ; 停止所有检测定时器
-    
+
     ; 切换运行状态
     isRunning := !isRunning
-    
+
     if isRunning {
         ; 初始化暂停状态
         for key, _ in isPaused {
@@ -358,15 +361,15 @@ ToggleMacro(*) {
         ; 停止所有定时器
         StopAllTimers()
         ManageTimers("none", false) ; 停止所有检测定时器
-        
+
         ; 重置所有暂停状态
         for key, _ in isPaused {
             isPaused[key] := false
         }
-        
+
         ; 确保释放所有按键
         ReleaseAllKeys()
-        
+
         UpdateStatus("已停止", "宏已停止")
     }
 }
@@ -375,7 +378,7 @@ ToggleMacro(*) {
  * 释放所有可能被按住的按键
  */
 ReleaseAllKeys() {
-    global holdStates    
+    global holdStates
     for uniqueKey, _ in holdStates {
         ; 解析 uniqueKey 得到实际按键
         arr := StrSplit(uniqueKey, ":")
@@ -465,9 +468,9 @@ StartAllTimers() {
     StopAllTimers()
     GetDynamicbSkill()
     if (RunMod.Value = 1) {
-        Loop 5 {
+        loop 5 {
             skillIndex := A_Index
-            if (cSkill[skillIndex].enable.Value) {
+            if (cSkill[skillIndex]["enable"].Value) {
                 PressSkillCallback(skillIndex)
             }
         }
@@ -505,23 +508,23 @@ StopAllTimers() {
         SetTimer(boundFunc, 0)
         skillTimers.Delete(timerName)
     }
-    
+
     ; 处理单线程模式的队列定时器
     if (RunMod && RunMod.Value = 2) {
         SetTimer(KeyQueueWorker, 0)
         keyQueue := []
         keyQueueLastExec := Map()
     }
-    
+
     ; 一次性清空映射
     skillTimers := Map()
     bSkill := Map()
-    
+
     ; 停止可能的自动移动定时器
     SetTimer(MoveMouseToNextPoint, 0)
-    
+
     ; 释放所有按键
-    ReleaseAllKeys() 
+    ReleaseAllKeys()
 }
 /**
  * 管理全局定时器
@@ -532,8 +535,8 @@ StopAllTimers() {
  */
 ManageTimers(timerType, enable, interval := unset) {
     static DEFAULT_INTERVALS := Map(
-        "window", 100, 
-        "blood", 50, 
+        "window", 100,
+        "blood", 50,
         "tab", 100
     )
     global uCtrl
@@ -546,16 +549,16 @@ ManageTimers(timerType, enable, interval := unset) {
     }
     else if (timerType = "blood") {
         actualInterval := IsSet(interval) ? interval : (
-            uCtrl.Has("ipPause") && uCtrl["ipPause"].Has("interval") 
-                ? Integer(uCtrl["ipPause"]["interval"].Value) 
+            uCtrl.Has("ipPause") && uCtrl["ipPause"].Has("interval")
+                ? Integer(uCtrl["ipPause"]["interval"].Value)
                 : DEFAULT_INTERVALS["blood"]
         )
         SetTimer(AutoPauseByBlood, enable ? actualInterval : 0)
     }
     else if (timerType = "tab") {
         actualInterval := IsSet(interval) ? interval : (
-            uCtrl.Has("tabPause") && uCtrl["tabPause"].Has("interval") 
-                ? Integer(uCtrl["tabPause"]["interval"].Value) 
+            uCtrl.Has("tabPause") && uCtrl["tabPause"].Has("interval")
+                ? Integer(uCtrl["tabPause"]["interval"].Value)
                 : DEFAULT_INTERVALS["tab"]
         )
         SetTimer(AutoPauseByTAB, enable ? actualInterval : 0)
@@ -563,9 +566,9 @@ ManageTimers(timerType, enable, interval := unset) {
     else if (timerType = "all") {
         ; 分别读取各自的 interval 控件值，保证每个检测项独立
         windowInterval := DEFAULT_INTERVALS["window"]
-        bloodInterval := (uCtrl.Has("ipPause") && uCtrl["ipPause"].Has("interval")) 
+        bloodInterval := (uCtrl.Has("ipPause") && uCtrl["ipPause"].Has("interval"))
             ? Integer(uCtrl["ipPause"]["interval"].Value) : DEFAULT_INTERVALS["blood"]
-        tabInterval := (uCtrl.Has("tabPause") && uCtrl["tabPause"].Has("interval")) 
+        tabInterval := (uCtrl.Has("tabPause") && uCtrl["tabPause"].Has("interval"))
             ? Integer(uCtrl["tabPause"]["interval"].Value) : DEFAULT_INTERVALS["tab"]
         ManageTimers("window", enable, windowInterval)
         ManageTimers("blood", enable, bloodInterval)
@@ -589,37 +592,37 @@ ManageTimers(timerType, enable, interval := unset) {
  */
 ValidateTimerInterval(ctrl, timerType) {
     global statusBar, isRunning
-    
+
     ; 默认值设置
     defaultValue := timerType == "blood" ? 50 : 100
     typeText := timerType == "blood" ? "血条检测" : "界面检测"
-    
+
     try {
         val := Integer(ctrl.Value)
-        
+
         ; 范围检查 (10-1000ms)
         if (val < 10 || val > 1000) {
             ctrl.Value := defaultValue
             statusBar.Text := "定时器间隔必须在10-1000毫秒范围内，已重置为" defaultValue "ms"
             return defaultValue
         }
-        
+
         ; 构建状态消息
         statusMsg := typeText "间隔已更新: " val "ms"
-        
+
         ; 添加提示
         if (isRunning)
             statusMsg .= " (点击'刷新检测'按钮使更改生效)"
-            
+
         if (val < 30)
             statusMsg .= " - 注意：过低的间隔可能会影响性能"
-            
+
         statusBar.Text := statusMsg
     } catch {
         ctrl.Value := defaultValue
         statusBar.Text := "请输入有效数字，已重置为" defaultValue "ms"
     }
-    
+
     return Integer(ctrl.Value)
 }
 
@@ -629,22 +632,22 @@ ValidateTimerInterval(ctrl, timerType) {
  */
 RefreshDetection(*) {
     global isRunning, statusBar, uCtrl, isPaused
-    
+
     if (!isRunning) {
         statusBar.Text := "宏未运行，无需刷新检测"
         return
     }
-    
+
     ; 停止然后重启所有定时器
     ManageTimers("none", false)
-    
+
     ; 验证并获取间隔设置
     bloodInterval := ValidateTimerInterval(uCtrl["ipPause"]["interval"], "blood")
     tabInterval := ValidateTimerInterval(uCtrl["tabPause"]["interval"], "tab")
-    
+
     ; 清理像素缓存 - 强制触发GetPixelRGB的缓存清理
     CleanPixelCache()
-    
+
     ; 是否要强制恢复运行状态
     forceReset := uCtrl.Has("forceReset") && uCtrl["forceReset"].Value
     if (forceReset) {
@@ -654,26 +657,26 @@ RefreshDetection(*) {
         }
         UpdateStatus("运行中", "已强制恢复运行")
     }
-    
+
     ; 立即执行一次检测
     try {
         CheckWindow()
-        
+
         ; 仅当相应检测启用时执行
         if (uCtrl["ipPause"]["enable"].Value)
             AutoPauseByBlood()
-            
+
         if (uCtrl["tabPause"]["enable"].Value)
             AutoPauseByTAB()
     } catch {
         ; 忽略任何错误
     }
-    
+
     ; 重新启动定时器
     ManageTimers("window", true, 100)
     ManageTimers("blood", true, bloodInterval)
     ManageTimers("tab", true, tabInterval)
-    
+
     ; 获取更新后的状态
     paused := IsAnyPaused()
     statusBar.Text := "已刷新所有检测定时器" (paused ? " (宏仍在暂停状态)" : "")
@@ -726,58 +729,53 @@ StartAutoMove() {
  */
 HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", description := "") {
     global uCtrl, buffThreshold, holdStates
-    static lastReholdTime := Map()     ; 存储每个按键上次重新按住的时间
-    static REHOLD_MIN_INTERVAL := 2000 ; 重新按住的最小间隔(毫秒)
-    
+    static lastReholdTime := Map()
+    static REHOLD_MIN_INTERVAL := 2000
+
+    ; 缓存 A_TickCount
+    currentTime := A_TickCount
+
+    ; 改进的唯一键生成
+    uniqueKey := type ":" (type = "mouse" ? "mouse_" mouseBtn : "key_" keyOrBtn)
+
     ; 快速返回检查
     if (IsAnyPaused())
         return
-    ; 生成唯一键标识符
-    uniqueKey := type ":" (type="mouse" ? mouseBtn : keyOrBtn)
-    
+
     ; 预先确定是否为鼠标操作
     isMouse := (type = "mouse")
-    ; 获取当前Shift状态
     shiftEnabled := uCtrl["shift"]["enable"].Value
-    ; 确定按键
-    currentTime := A_TickCount
 
-    ; 按照模式分类处理
+    ; 模式处理
     switch mode {
         case 2: ; BUFF模式
-            ; 只在技能未激活时执行
             if (pos && IsSkillActive(pos.x, pos.y))
                 return
-                
-            ; 执行按键操作
             if (isMouse) {
                 shiftEnabled ? SendWithShift(mouseBtn) : Click(mouseBtn)
             } else {
                 shiftEnabled ? SendWithShift(keyOrBtn) : Send("{" keyOrBtn "}")
             }
-            
+
         case 3: ; 按住模式
             needPress := false
             isHeld := holdStates.Has(uniqueKey) && holdStates[uniqueKey]
-            
+
             if (!isHeld) {
-                ; 首次按下
                 needPress := true
                 holdStates[uniqueKey] := true
                 lastReholdTime[uniqueKey] := currentTime
-            } 
-            else if (!lastReholdTime.Has(uniqueKey) || 
-                    (currentTime - lastReholdTime[uniqueKey] > REHOLD_MIN_INTERVAL)) {
-                ; 需要重新按住
+            }
+            else if (!lastReholdTime.Has(uniqueKey) ||
+            (currentTime - lastReholdTime[uniqueKey] > REHOLD_MIN_INTERVAL)) {
                 needPress := true
                 lastReholdTime[uniqueKey] := currentTime
             }
-            
-            ; 执行按键动作（只在需要时执行）
+
             if (needPress) {
                 if (shiftEnabled && !isHeld)
                     Send "{Shift down}"
-                    
+
                 if (isMouse) {
                     if (isHeld)
                         Click("up " mouseBtn)
@@ -788,9 +786,8 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", descript
                     Send("{" keyOrBtn " down}")
                 }
             }
-            
-        default: ; 连点模式(1)
-            ; 执行简单点击
+
+        default: ; 连点模式
             if (isMouse) {
                 shiftEnabled ? SendWithShift(mouseBtn) : Click(mouseBtn)
             } else {
@@ -806,15 +803,15 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", descript
 FillKeyQueue() {
     global cSkill, mSkill, uCtrl, bSkill
     ; 技能
-    Loop 5 {
+    loop 5 {
         idx := A_Index
-        if (cSkill[idx].enable.Value) {
+        if (cSkill[idx]["enable"].Value) {
             EnqueueKey(
-                cSkill[idx].key.Value,
-                cSkill[idx].mode.Value,
+                cSkill[idx]["key"].Value,
+                cSkill[idx]["mode"].Value,
                 bSkill.Has(idx) ? bSkill[idx] : "",
                 "key", "", "技能" idx,
-                Integer(cSkill[idx].interval.Value)
+                Integer(cSkill[idx]["interval"].Value)
             )
         }
     }
@@ -832,7 +829,7 @@ FillKeyQueue() {
     }
     ; 功能键
     for u in ["dodge", "potion", "forceMove"] {
-        if (uCtrl.Has(u) && uCtrl[u]["enable"].Value) {
+        if (uCtrl[u]["enable"].Value) {
             EnqueueKey(
                 uCtrl[u]["key"].Value,
                 1,
@@ -846,103 +843,184 @@ FillKeyQueue() {
 
 /**
  * 添加到队列的通用函数
- * 避免添加重复操作类型，保证按照设定的间隔执行
  */
 EnqueueKey(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", description := "", interval := 1000) {
     global keyQueue
     ; 生成唯一ID
-    uniqueId := type ":" (type="mouse" ? mouseBtn : keyOrBtn)
+    uniqueId := type ":" (type = "mouse" ? mouseBtn : keyOrBtn)
+
     ; 优先级计算
-    getPriority := (mode) => (
-        mode = 2 ? 3
-        : mode = 3 ? 2
-        : mode = 1 ? 1
-        : 0
-    )
+    priority := GetPriorityFromMode(mode)
+
     ; 检查队列中是否已有相同唯一ID的操作
+    existingIndex := 0
     for i, existingItem in keyQueue {
-        existingId := existingItem.type ":" (existingItem.type="mouse" ? existingItem.mouseBtn : existingItem.keyOrBtn)
+        existingId := existingItem.Get("type") ":" (existingItem.Get("type") = "mouse" ? existingItem.Get("mouseBtn") :
+            existingItem.Get("keyOrBtn"))
         if (existingId = uniqueId) {
-            ; 只更新优先级、模式、描述、interval，不刷新time，保证interval生效
-            existingItem.priority := getPriority(mode)
-            existingItem.mode := mode
-            existingItem.pos := pos
-            existingItem.description := description
-            existingItem.interval := interval
-            return
-        }
-    }
-    ; 如果队列中没有相同类型的操作，添加新操作
-    item := {
-        keyOrBtn: keyOrBtn, mode: mode, pos: pos, type: type,
-        mouseBtn: mouseBtn, description: description,
-        time: A_TickCount, interval: interval,
-        priority: getPriority(mode)
-    }
-    ; 队列最大长度限制
-    maxLen := 20
-    if (keyQueue.Length >= maxLen) {
-        keyQueue.Pop()
-    }
-    ; 优先级插入（二分查找法）
-    left := 1
-    right := keyQueue.Length
-    while (left <= right) {
-        mid := Floor((left + right) / 2)
-        if (item.priority > keyQueue[mid].priority) {
-            right := mid - 1
-        } else {
-            left := mid + 1
-        }
-    }
-    keyQueue.InsertAt(left, item)
-}
-/**
- * 队列处理定时器（精准间隔支持）
- * 每个队列项被执行后，立即补充自身，保证interval大于50ms时也能正常触发
- */
-KeyQueueWorker() {
-    global keyQueue, keyQueueLastExec
-    if (keyQueue.Length = 0)
-        return
-    now := A_TickCount
-    for i, item in keyQueue {
-        uniqueId := item.type ":" (item.type="mouse" ? item.mouseBtn : item.keyOrBtn)
-        interval := item.interval
-        last := keyQueueLastExec.Has(uniqueId) ? keyQueueLastExec[uniqueId] : 0
-        if (now - last >= interval) {
-            HandleKeyMode(item.keyOrBtn, item.mode, item.pos, item.type, item.mouseBtn, item.description)
-            keyQueueLastExec[uniqueId] := now
-            keyQueue.RemoveAt(i)
-            ; 重新入队，保证持续性
-            EnqueueKey(item.keyOrBtn, item.mode, item.pos, item.type, item.mouseBtn, item.description, interval)
+            existingIndex := i
             break
         }
     }
+
+    ; 创建或更新项
+    item := Map(
+        "keyOrBtn", keyOrBtn,
+        "mode", mode,
+        "pos", pos,
+        "type", type,
+        "mouseBtn", mouseBtn,
+        "description", description,
+        "time", A_TickCount,
+        "interval", interval,
+        "priority", priority
+    )
+
+    ; 如果存在，先移除旧项
+    if (existingIndex > 0) {
+        keyQueue.RemoveAt(existingIndex)
+    }
+
+    ; 队列长度限制逻辑 - 当新项要添加且队列已满时检查
+    maxLen := 20
+    if (keyQueue.Length >= maxLen) {
+        ; 找到优先级最低的项
+        lowestPriority := 999
+        lowestIndex := 0
+        for i, queueItem in keyQueue {
+            if (queueItem.Get("priority") < lowestPriority) {
+                lowestPriority := queueItem.Get("priority")
+                lowestIndex := i
+            }
+        }
+        if (lowestIndex > 0 && priority > lowestPriority) {
+            keyQueue.RemoveAt(lowestIndex)
+        } else if (existingIndex == 0) {
+            return ; 新项优先级不够高，且不是更新操作
+        }
+    }
+
+    ; 边界情况处理
+    if (keyQueue.Length == 0) {
+        keyQueue.Push(item)
+        return
+    }
+
+    ; 优化的二分查找插入
+    left := 1
+    right := keyQueue.Length
+
+    ; 处理边界情况
+    if (priority > keyQueue[1].Get("priority")) {
+        keyQueue.InsertAt(1, item)  ; 比第一个还高优先级
+        return
+    } else if (priority <= keyQueue[right].Get("priority")) {
+        keyQueue.Push(item)  ; 比最后一个还低优先级
+        return
+    }
+
+    ; 标准二分查找
+    while (right - left > 1) {
+        mid := Floor((left + right) / 2)
+        if (priority > keyQueue[mid].Get("priority")) {
+            right := mid
+        } else {
+            left := mid
+        }
+    }
+
+    ; 在正确的位置插入
+    keyQueue.InsertAt(right, item)
 }
-; ==================== 按键回调函数 ====================
+
+; 独立的优先级计算函数（替代箭头函数）
+GetPriorityFromMode(mode) {
+    switch mode {
+        case 2: return 3
+        case 3: return 2
+        case 1: return 1
+        default: return 0
+    }
+}
 
 /**
- * 按下技能按键的回调函数
- * @param {Integer} skillNum - 技能索引 (1-5)
+ * 队列处理定时器（精准间隔支持）
  */
-PressSkillCallback(skillNum) {
-    global cSkill, skillTimers, skillMod, RunMod
-    timerKey := "skill" skillNum
-    ; 先停止并移除旧定时器
+KeyQueueWorker() {
+    global keyQueue, keyQueueLastExec
+    now := A_TickCount
+    queueCopy := keyQueue.Clone()
+    keyQueue := []  ; 完全清空队列
+
+    pendingItems := []  ; 用于存储需要重新入队的项
+
+    for item in queueCopy {
+        ; 统一uniqueId格式
+        uniqueId := item.Get("type") ":" (item.Get("type") = "mouse" ? item.Get("mouseBtn") : item.Get("keyOrBtn"))
+        lastExec := keyQueueLastExec.Get(uniqueId, 0)
+
+        if (now - lastExec >= item.Get("interval")) {
+            HandleKeyMode(
+                item.Get("keyOrBtn"),
+                item.Get("mode"),
+                item.Get("pos"),
+                item.Get("type"),
+                item.Get("mouseBtn"),
+                item.Get("description")
+            )
+            keyQueueLastExec[uniqueId] := now  ; 更新执行时间
+
+            ; 将执行后需要重新入队的项添加到待处理列表，而不是立即处理
+            pendingItems.Push({
+                keyOrBtn: item.Get("keyOrBtn"),
+                mode: item.Get("mode"),
+                pos: item.Get("pos"),
+                type: item.Get("type"),
+                mouseBtn: item.Get("mouseBtn"),
+                description: item.Get("description"),
+                interval: item.Get("interval")
+            })
+        } else {
+            ; 间隔未到，保留在队列
+            keyQueue.Push(item)
+        }
+    }
+
+    ; 在队列处理完成后，重新添加需要再次执行的项
+    for pendingItem in pendingItems {
+        EnqueueKey(
+            pendingItem.keyOrBtn,
+            pendingItem.mode,
+            pendingItem.pos,
+            pendingItem.type,
+            pendingItem.mouseBtn,
+            pendingItem.description,
+            pendingItem.interval
+        )
+    }
+}
+
+; ==================== 按键回调函数 ====================
+/**
+ * 按下技能按键的回调函数
+ * @param {Integer} skillId - 技能索引 (1-5)
+ */
+PressSkillCallback(skillId) {
+    global cSkill, skillTimers, RunMod, bSkill
+    timerKey := "skill" skillId
     if (skillTimers.Has(timerKey)) {
         SetTimer(skillTimers[timerKey], 0)
         skillTimers.Delete(timerKey)
     }
-    if (!cSkill[skillNum].enable.Value)
+    if (cSkill[skillId]["enable"].Value != 1)
         return
-    key := cSkill[skillNum].key.Value
-    mode := cSkill[skillNum].mode.Value
-    pos := bSkill.Has(skillNum) ? bSkill[skillNum] : ""
-    interval := Integer(cSkill[skillNum].interval.Value)
-    boundFunc := (RunMod.Value = 1)
-        ? HandleKeyMode.Bind(key, mode, pos, "key", "", "技能" skillNum)
-        : EnqueueKey.Bind(key, mode, pos, "key", "", "技能" skillNum, interval)
+    key := cSkill[skillId]["key"].Value
+    mode := cSkill[skillId]["mode"].Value
+    pos := bSkill.Has(skillId) ? bSkill[skillId] : ""
+    interval := Integer(cSkill[skillId]["interval"].Value)
+    boundFunc := (RunMod.Value == 1)
+        ? HandleKeyMode.Bind(key, mode, pos, "key", "", "技能" skillId)
+        : EnqueueKey.Bind(key, mode, pos, "key", "", "技能" skillId, interval)
     skillTimers[timerKey] := boundFunc
     SetTimer(boundFunc, interval)
 }
@@ -952,22 +1030,23 @@ PressSkillCallback(skillNum) {
  * @param {String} mouseBtn - 鼠标按钮名 (left/right)
  */
 PressMouseCallback(mouseBtn) {
-    global mSkill, skillTimers, skillMod, RunMod
+    global mSkill, skillTimers, RunMod, bSkill
     timerKey := "mouse" mouseBtn
     if (skillTimers.Has(timerKey)) {
         SetTimer(skillTimers[timerKey], 0)
         skillTimers.Delete(timerKey)
     }
-    if (mSkill[mouseBtn]["enable"].Value) {
-        mode := mSkill[mouseBtn]["mode"].Value
-        pos := bSkill.Has(mouseBtn) ? bSkill[mouseBtn] : ""
-        interval := Integer(mSkill[mouseBtn]["interval"].Value)
-        boundFunc := (RunMod.Value = 1)
-            ? HandleKeyMode.Bind(mouseBtn, mode, pos, "mouse", mouseBtn, "鼠标" mouseBtn)
-            : EnqueueKey.Bind(mouseBtn, mode, pos, "mouse", mouseBtn, "鼠标" mouseBtn, interval)
-        skillTimers[timerKey] := boundFunc
-        SetTimer(boundFunc, interval)
-    }
+    if (mSkill[mouseBtn]["enable"].Value != 1)
+        return
+    config := mSkill[mouseBtn]
+    mode := config["mode"].Value
+    pos := bSkill.Has(mouseBtn) ? bSkill[mouseBtn] : ""
+    interval := Integer(config["interval"].Value)
+    boundFunc := (RunMod.Value == 1)
+        ? HandleKeyMode.Bind(mouseBtn, mode, pos, "mouse", mouseBtn, "鼠标" mouseBtn)
+        : EnqueueKey.Bind(mouseBtn, mode, pos, "mouse", mouseBtn, "鼠标" mouseBtn, interval)
+    skillTimers[timerKey] := boundFunc
+    SetTimer(boundFunc, interval)
 }
 
 /**
@@ -975,22 +1054,25 @@ PressMouseCallback(mouseBtn) {
  * @param {String} uSkillId - 功能键ID
  */
 PressuSkillKey(uSkillId) {
-    global uCtrl, skillTimers, RunMod
+    global uCtrl, skillTimers, RunMod, bSkill
     timerKey := "uSkill" uSkillId
+
     if (skillTimers.Has(timerKey)) {
         SetTimer(skillTimers[timerKey], 0)
         skillTimers.Delete(timerKey)
     }
-    if (uCtrl[uSkillId]["enable"].Value) {
-        mode := 1
-        pos := bSkill.Has(uSkillId) ? bSkill[uSkillId] : ""
-        interval := Integer(uCtrl[uSkillId]["interval"].Value)
-        boundFunc := (RunMod.Value = 1)
-            ? HandleKeyMode.Bind(uCtrl[uSkillId]["key"].Value, mode, pos, "key", "", uSkillId)
-            : EnqueueKey.Bind(uCtrl[uSkillId]["key"].Value, mode, pos, "key", "", uSkillId, interval)
-        skillTimers[timerKey] := boundFunc
-        SetTimer(boundFunc, interval)
-    }
+    if (uCtrl[uSkillId]["enable"].Value != 1)
+        return
+    config := uCtrl[uSkillId]
+    key := config["key"].Value
+    pos := bSkill.Has(uSkillId) ? bSkill[uSkillId] : ""
+    interval := Integer(config["interval"].Value)
+    boundFunc := (RunMod.Value == 1)
+        ? HandleKeyMode.Bind(key, 1, pos, "key", "", uSkillId)
+        : EnqueueKey.Bind(key, 1, pos, "key", "", uSkillId, interval)
+    skillTimers[timerKey] := boundFunc
+    SetTimer(boundFunc, interval)
+
 }
 
 /**
@@ -1009,7 +1091,7 @@ SendWithShift(key) {
  * 鼠标自动移动函数
  */
 MoveMouseToNextPoint() {
-    global isRunning, uCtrl, isPaused
+    global isRunning, uCtrl
 
     ; 检查各种条件
     if (!isRunning || IsAnyPaused() || !uCtrl["mouseAutoMove"]["enable"].Value)
@@ -1021,12 +1103,12 @@ MoveMouseToNextPoint() {
 
         ; 计算六个点的位置
         points := [
-            {x: Round(0.15 * res.D4W), y: Round(0.15 * res.D4H)},  ; 左上角
-            {x: Round(0.5 * res.D4W), y: Round(0.15 * res.D4H)},   ; 中上角
-            {x: Round(0.85 * res.D4W), y: Round(0.15 * res.D4H)},  ; 右上角
-            {x: Round(0.85 * res.D4W), y: Round(0.85 * res.D4H)},  ; 右下角
-            {x: Round(0.5 * res.D4W), y: Round(0.85 * res.D4H)},   ; 中下角
-            {x: Round(0.15 * res.D4W), y: Round(0.85 * res.D4H)}   ; 左下角
+        { x: Round(0.15 * res.D4W), y: Round(0.15 * res.D4H) },  ; 左上角
+        { x: Round(0.5 * res.D4W), y: Round(0.15 * res.D4H) },   ; 中上角
+        { x: Round(0.85 * res.D4W), y: Round(0.15 * res.D4H) },  ; 右上角
+        { x: Round(0.85 * res.D4W), y: Round(0.85 * res.D4H) },  ; 右下角
+        { x: Round(0.5 * res.D4W), y: Round(0.85 * res.D4H) },   ; 中下角
+        { x: Round(0.15 * res.D4W), y: Round(0.85 * res.D4H) }   ; 左下角
         ]
 
         ; 确保currentPoint字段存在
@@ -1035,11 +1117,11 @@ MoveMouseToNextPoint() {
 
         ; 获取当前点索引
         currentIndex := uCtrl["mouseAutoMove"]["currentPoint"]
-        
+
         ; 验证索引范围
         if (currentIndex < 1 || currentIndex > points.Length)
             currentIndex := 1
-            
+
         ; 移动鼠标到当前点
         currentPoint := points[currentIndex]
         MouseMove(currentPoint.x, currentPoint.y, 0)
@@ -1120,7 +1202,7 @@ GetDynamicbSkill() {
 
     ; 清空并填充技能位置
     bSkill.Clear()
-    Loop 5 {
+    loop 5 {
         idx := A_Index
         bSkill[idx] := {
             x: Round((baseX + offset * (idx - 1)) * res.scale),
@@ -1136,7 +1218,6 @@ GetDynamicbSkill() {
         y: Round(baseY * res.scale)
     }
 }
-
 
 ; ==================== 像素检测与暂停机制 ====================
 /**
@@ -1155,12 +1236,12 @@ CheckKeyPoints(res, pixelCache := unset) {
             tabcolor: colorTAB,
             isBlueColor: (colorDFX.r + 50 < colorDFX.b && colorDFX.b >= 100),
             isRedColor: (colorTAB.r > 100 && colorTAB.g < 60 && colorTAB.b < 60),
-            positions: {dfx: dfx, dty: dty, tabx: tabx, tab: tab}
+            positions: { dfx: dfx, dty: dty, tabx: tabx, tab: tab }
         }
     } catch {
         return {
-            dfxcolor: {}, 
-            tabcolor: {}, 
+            dfxcolor: {},
+            tabcolor: {},
             isBlueColor: false,
             isRedColor: false,
             positions: {}
@@ -1183,11 +1264,11 @@ CheckPauseByEnter(res := unset, pixelCache := unset) {
     grayY := Round(2070 * res.scaleH)
     grayKey := "enterGray"
     grayColor := (IsSet(pixelCache) && pixelCache.Has(grayKey)) ? pixelCache[grayKey] : GetPixelRGB(grayX, grayY)
-    Loop 6 {
+    loop 6 {
         x := Round(baseX + offset * (A_Index - 1))
         key := "enter" A_Index
         colorObj := (IsSet(pixelCache) && pixelCache.Has(key)) ? pixelCache[key] : GetPixelRGB(x, baseY)
-        if (colorObj.r > (colorObj.g + colorObj.b) * 8 && colorObj.r > 100) {
+        if (colorObj.r > (colorObj.g + colorObj.b) * 8 && colorObj.r > 60) {
             return (grayColor.r < 100 && grayColor.g < 85 && grayColor.b < 85)
         }
     }
@@ -1206,11 +1287,11 @@ CheckPauseByBlood(res := unset, pixelCache := unset) {
         ys := [Round(85 * res.scaleH), Round(95 * res.scaleH)]
         hitCount := 0
         neededHits := 2
-        Loop 2 {
+        loop 2 {
             x := xs[A_Index]
-            Loop 2 {
+            loop 2 {
                 y := ys[A_Index]
-                key := "blood" ((A_Index-1)*2 + A_Index)
+                key := "blood" ((A_Index - 1) * 2 + A_Index)
                 color := (IsSet(pixelCache) && pixelCache.Has(key)) ? pixelCache[key] : GetPixelRGB(x, y)
                 if (color.r > (color.g + color.b) * 2 && color.r > 100)
                     hitCount++
@@ -1233,7 +1314,8 @@ AutoPauseByBlood() {
 
     ; 读取多次确认次数（带默认值和容错）
     PAUSE_CONFIRM := uCtrl["ipPause"].Has("pauseConfirm") ? Max(1, Integer(uCtrl["ipPause"]["pauseConfirm"].Value)) : 5
-    RESUME_CONFIRM := uCtrl["ipPause"].Has("resumeConfirm") ? Max(1, Integer(uCtrl["ipPause"]["resumeConfirm"].Value)) : 2
+    RESUME_CONFIRM := uCtrl["ipPause"].Has("resumeConfirm") ? Max(1, Integer(uCtrl["ipPause"]["resumeConfirm"].Value)) :
+        2
 
     if (!isRunning || uCtrl["ipPause"]["enable"].Value != 1)
         return
@@ -1243,9 +1325,9 @@ AutoPauseByBlood() {
     ys := [Round(85 * res.scaleH), Round(95 * res.scaleH)]
     hitCount := 0
 
-    Loop 2 {
+    loop 2 {
         x := xs[A_Index]
-        Loop 2 {
+        loop 2 {
             y := ys[A_Index]
             color := GetPixelRGB(x, y)
             if (color.r > (color.g + color.b) * 2 && color.r > 100)
@@ -1291,8 +1373,10 @@ AutoPauseByTAB() {
     static resumeHitCount := 0
 
     ; 读取多次确认次数（带默认值和容错）
-    PAUSE_CONFIRM := uCtrl["tabPause"].Has("pauseConfirm") ? Max(1, Integer(uCtrl["tabPause"]["pauseConfirm"].Value)) : 2
-    RESUME_CONFIRM := uCtrl["tabPause"].Has("resumeConfirm") ? Max(1, Integer(uCtrl["tabPause"]["resumeConfirm"].Value)) : 2
+    PAUSE_CONFIRM := uCtrl["tabPause"].Has("pauseConfirm") ? Max(1, Integer(uCtrl["tabPause"]["pauseConfirm"].Value)) :
+        2
+    RESUME_CONFIRM := uCtrl["tabPause"].Has("resumeConfirm") ? Max(1, Integer(uCtrl["tabPause"]["resumeConfirm"].Value)) :
+        2
 
     ; 如果宏未运行或界面检测未启用，则直接返回
     if (!isRunning || uCtrl["tabPause"]["enable"].Value != 1)
@@ -1355,7 +1439,7 @@ AutoPauseByTAB() {
  */
 IsSkillActive(x, y) {
     tryCount := 2
-    Loop tryCount {
+    loop tryCount {
         try {
             color := GetPixelRGB(x, y)
             return (color.g > color.b + buffThreshold.Value)
@@ -1378,55 +1462,56 @@ GetPixelRGB(x, y) {
     static cacheLifetime := 20           ; 缓存有效期(毫秒)
     static lastCacheClear := 0           ; 最后一次缓存清理时间
     static currentTime := A_TickCount    ; 当前时间
-    static cacheStats := {hits: 0, misses: 0, cleanups: 0}  ; 缓存统计
+    static cacheStats := { hits: 0, misses: 0, cleanups: 0 }  ; 缓存统计
     static maxCacheEntries := 100        ; 缓存最大条目数
-    
+
     ; 获取当前时间
     currentTime := A_TickCount
-    
+
     ; 定期清理缓存(每500毫秒)或缓存项超过限制时
     if (currentTime - lastCacheClear > 500 || pixelCache.Count > maxCacheEntries) {
-        pixelCache.Clear()
+        pixelCache := Map()
         lastCacheClear := currentTime
         cacheStats.cleanups++
     }
-    
+
     ; 计算缓存键，使用整数值避免浮点数精度问题
     cacheKey := Format("{:d},{:d},{:d}", x, y, currentTime // cacheLifetime)
-    
+
     ; 如果缓存中已有该位置的最近结果，直接返回
     if (pixelCache.Has(cacheKey)) {
         cacheStats.hits++
         return pixelCache[cacheKey]
     }
-    
+
     ; 否则获取新的颜色值
     try {
         color := PixelGetColor(x, y, "RGB")
         r := (color >> 16) & 0xFF
         g := (color >> 8) & 0xFF
         b := color & 0xFF
-        
-        result := {r: r, g: g, b: b}
-        
+
+        result := { r: r, g: g, b: b }
+
         ; 缓存结果供后续使用 - 使用浅拷贝对象减少内存占用
         pixelCache[cacheKey] := result
         cacheStats.misses++
         return result
     } catch as err {
-        return {r: 0, g: 0, b: 0}  ; 失败时返回黑色
+        return { r: 0, g: 0, b: 0 }  ; 失败时返回黑色
     }
 }
+
 ; ==================== 设置管理 ====================
 /**
  * 初始化配置方案列表
  */
 InitializeProfiles() {
     global profileList, profileDropDown, currentProfileName
-    
+
     ; 主配置文件路径
     settingsFile := A_ScriptDir "\settings.ini"
-    
+
     ; 确保配置文件所在目录存在
     settingsDir := RegExReplace(settingsFile, "[^\\]+$", "")
     if (!DirExist(settingsDir) && settingsDir != "") {
@@ -1436,7 +1521,7 @@ InitializeProfiles() {
             ; 创建目录失败时继续尝试
         }
     }
-    
+
     ; 确保配置文件存在
     if (!FileExist(settingsFile)) {
         ; 创建默认配置文件
@@ -1446,12 +1531,12 @@ InitializeProfiles() {
             ; 文件创建失败时继续使用内存中的默认值
         }
     }
-    
+
     ; 从主配置文件读取配置方案列表
     try {
         profilesString := IniRead(settingsFile, "Profiles", "List", "默认")
         profileList := StrSplit(profilesString, "|")
-        
+
         ; 确保默认配置总是存在
         if (!InArray(profileList, "默认")) {
             profileList.InsertAt(1, "默认")
@@ -1466,10 +1551,10 @@ InitializeProfiles() {
             ; 写入失败时继续使用内存中的默认值
         }
     }
-    
+
     ; 更新下拉框
     UpdateProfileDropDown()
-    
+
     ; 如果存在上次使用的配置记录，则加载它
     try {
         lastProfile := IniRead(settingsFile, "Global", "LastUsedProfile", "默认")
@@ -1505,7 +1590,7 @@ InitializeProfiles() {
  */
 UpdateProfileDropDown() {
     global profileList, profileDropDown, currentProfileName
-    
+
     ; 保存当前选择
     currentSelection := currentProfileName
     ; 清空并重新填充下拉框
@@ -1513,7 +1598,7 @@ UpdateProfileDropDown() {
     for i, name in profileList {
         profileDropDown.Add([name])
     }
-    
+
     ; 尝试恢复选择
     found := false
     for i, name in profileList {
@@ -1523,7 +1608,7 @@ UpdateProfileDropDown() {
             break
         }
     }
-    
+
     ; 如果未找到，选择第一个
     if (!found && profileList.Length > 0)
         profileDropDown.Choose(1)
@@ -1535,20 +1620,20 @@ UpdateProfileDropDown() {
  */
 LoadSelectedProfile(ctrl, *) {
     global profileList, currentProfileName
-    
+
     if (ctrl.Value <= 0 || ctrl.Value > profileList.Length)
         return
-    
+
     ; 获取选定的配置名
     selectedProfile := profileList[ctrl.Value]
     currentProfileName := selectedProfile
-    
+
     ; 更新输入框
     profileNameInput.Value := selectedProfile
-    
+
     ; 加载配置
     LoadSettings(A_ScriptDir "\settings.ini", selectedProfile)
-    
+
 }
 
 /**
@@ -1556,25 +1641,25 @@ LoadSelectedProfile(ctrl, *) {
  */
 SaveProfile(*) {
     global currentProfileName, profileNameInput, profileList
-    
+
     ; 获取输入的配置名
     profileName := profileNameInput.Value
-    
+
     ; 验证配置名
     if (profileName = "") {
         MsgBox("请输入配置方案名称", "提示", 48)
         return
     }
-    
+
     ; 确认保存操作
     if (currentProfileName != profileName && InArray(profileList, profileName)) {
         if (MsgBox("配置方案「" profileName "」已存在，是否覆盖？", "确认", 4) != "Yes")
             return
     }
-    
+
     ; 保存配置
     SaveSettings(A_ScriptDir "\settings.ini", profileName)
-    
+
     ; 如果是新配置，添加到列表
     if (!InArray(profileList, profileName)) {
         profileList.Push(profileName)
@@ -1582,13 +1667,13 @@ SaveProfile(*) {
         IniWrite(Join(profileList, "|"), A_ScriptDir "\settings.ini", "Profiles", "List")
         UpdateProfileDropDown()
     }
-    
+
     ; 更新当前配置名
     currentProfileName := profileName
-    
+
     ; 记住这个配置作为最后使用的配置
     IniWrite(profileName, A_ScriptDir "\settings.ini", "Global", "LastUsedProfile")
-    
+
     for i, name in profileList {
         if (name = profileName) {
             profileDropDown.Choose(i)
@@ -1606,19 +1691,19 @@ SaveProfile(*) {
  */
 DeleteProfile(*) {
     global currentProfileName, profileList
-    
+
     settingsFile := A_ScriptDir "\settings.ini"
-    
+
     ; 不能删除默认配置
     if (currentProfileName = "默认") {
         MsgBox("无法删除默认配置方案", "提示", 48)
         return
     }
-    
+
     ; 确认删除
     if (MsgBox("确定要删除配置方案「" currentProfileName "」吗？", "确认", 4) != "Yes")
         return
-    
+
     ; 从列表中移除
     for i, name in profileList {
         if (name = currentProfileName) {
@@ -1626,22 +1711,22 @@ DeleteProfile(*) {
             break
         }
     }
-    
+
     ; 保存更新后的配置方案列表
     IniWrite(Join(profileList, "|"), settingsFile, "Profiles", "List")
-    
+
     ; 从设置文件中删除此配置方案的所有设置
     DeleteProfileSettings(settingsFile, currentProfileName)
-    
+
     ; 更新下拉框并选择默认配置
     UpdateProfileDropDown()
     profileDropDown.Choose(1)  ; 选择默认配置
     currentProfileName := "默认"
     profileNameInput.Value := "默认"
-    
+
     ; 加载默认配置
     LoadSettings(settingsFile, "默认")
-    
+
     DebugLog("已删除配置方案: " currentProfileName)
     statusBar.Text := "配置方案已删除，已加载默认配置"
 }
@@ -1654,12 +1739,12 @@ DeleteProfile(*) {
 DeleteProfileSettings(file, profileName) {
     ; 删除此配置方案的所有部分
     sectionPrefix := profileName "_"
-    
+
     ; 读取文件内容
     fileContent := FileRead(file)
     lines := StrSplit(fileContent, "`n", "`r")
     newContent := []
-    
+
     ; 过滤掉属于此配置方案的行
     inProfileSection := false
     for i, line in lines {
@@ -1669,16 +1754,16 @@ DeleteProfileSettings(file, profileName) {
         } else if (line ~= "^\[.*\]") {
             inProfileSection := false
         }
-        
+
         if (!inProfileSection) {
             newContent.Push(line)
         }
     }
-    
+
     ; 写回文件
     FileDelete(file)
     FileAppend(Join(newContent, "`n"), file)
-    
+
     DebugLog("已从配置文件删除配置方案设置: " profileName)
 }
 
@@ -1692,7 +1777,7 @@ InArray(arr, val) {
     ; 快速检查空数组
     if (arr.Length == 0)
         return false
-        
+
     for i, v in arr {
         if (v == val)  ; 使用严格相等比较
             return true
@@ -1710,14 +1795,14 @@ Join(arr, delimiter := ",") {
     ; 快速处理空数组
     if (arr.Length == 0)
         return ""
-        
+
     ; 单元素数组无需分隔符处理
     if (arr.Length == 1)
         return arr[1]
-        
+
     result := ""
     arrLen := arr.Length
-    
+
     for i, v in arr {
         result .= v
         ; 只在非最后一个元素后添加分隔符
@@ -1734,7 +1819,7 @@ Join(arr, delimiter := ",") {
  */
 SaveSettings(settingsFile := "", profileName := "默认") {
     global statusBar
-    
+
     if (settingsFile = "")
         settingsFile := A_ScriptDir "\settings.ini"
 
@@ -1748,7 +1833,7 @@ SaveSettings(settingsFile := "", profileName := "默认") {
             return
         }
     }
-    
+
     ; 如果文件不存在，创建一个基本结构
     if (!FileExist(settingsFile)) {
         try {
@@ -1766,7 +1851,7 @@ SaveSettings(settingsFile := "", profileName := "默认") {
     if (hotkeyControl.Value = "") {
         hotkeyControl.Value := "F1"
     }
-    
+
     try {
         ; 保存各类设置
         SaveSkillSettings(settingsFile, profileName)
@@ -1790,12 +1875,12 @@ SaveSkillSettings(file, profileName) {
     section := profileName "_Skills"
 
     for i in [1, 2, 3, 4, 5] {
-        IniWrite(cSkill[i].key.Value, file, section, "Skill" i "Key")
-        IniWrite(cSkill[i].enable.Value, file, section, "Skill" i "Enable")
-        IniWrite(cSkill[i].interval.Value, file, section, "Skill" i "Interval")
+        IniWrite(cSkill[i]["key"].Value, file, section, "Skill" i "Key")
+        IniWrite(cSkill[i]["enable"].Value, file, section, "Skill" i "Enable")
+        IniWrite(cSkill[i]["interval"].Value, file, section, "Skill" i "Interval")
 
         ; 获取下拉框选择的索引并保存
-        modeIndex := cSkill[i].mode.Value
+        modeIndex := cSkill[i]["mode"].Value
         IniWrite(modeIndex, file, section, "Skill" i "Mode")
         DebugLog("保存技能" i "模式: " modeIndex)
     }
@@ -1835,53 +1920,52 @@ SaveMouseSettings(file, profileName) {
  */
 SaveuSkillSettings(file, profileName) {
     global uCtrl
-    
+
     section := profileName "_uSkill"
-    
+
     ; 清除旧设置
     IniDelete(file, section)
-    
+
     ; 保存功能键（喝药、强移、闪避）
     if (uCtrl.Has("dodge")) {
         IniWrite(uCtrl["dodge"]["key"].Value, file, section, "DodgeKey")
         IniWrite(uCtrl["dodge"]["enable"].Value, file, section, "DodgeEnable")
         IniWrite(uCtrl["dodge"]["interval"].Value, file, section, "DodgeInterval")
     }
-    
+
     if (uCtrl.Has("potion")) {
         IniWrite(uCtrl["potion"]["key"].Value, file, section, "PotionKey")
         IniWrite(uCtrl["potion"]["enable"].Value, file, section, "PotionEnable")
         IniWrite(uCtrl["potion"]["interval"].Value, file, section, "PotionInterval")
     }
-    
+
     if (uCtrl.Has("forceMove")) {
         IniWrite(uCtrl["forceMove"]["key"].Value, file, section, "ForceMoveKey")
         IniWrite(uCtrl["forceMove"]["enable"].Value, file, section, "ForceMoveEnable")
         IniWrite(uCtrl["forceMove"]["interval"].Value, file, section, "ForceMoveInterval")
     }
-    
-    
+
     ; 确保保存所有暂停相关设置
     IniWrite(uCtrl["ipPause"]["enable"].Value, file, section, "IpPauseEnable")
     IniWrite(uCtrl["ipPause"]["interval"].Value, file, section, "IpPauseInterval")
     IniWrite(uCtrl["ipPause"]["pauseConfirm"].Value, file, section, "IpPausePauseConfirm")
     IniWrite(uCtrl["ipPause"]["resumeConfirm"].Value, file, section, "IpPauseResumeConfirm")
-    
+
     IniWrite(uCtrl["tabPause"]["enable"].Value, file, section, "TabPauseEnable")
     IniWrite(uCtrl["tabPause"]["interval"].Value, file, section, "TabPauseInterval")
     IniWrite(uCtrl["tabPause"]["pauseConfirm"].Value, file, section, "TabPausePauseConfirm")
     IniWrite(uCtrl["tabPause"]["resumeConfirm"].Value, file, section, "TabPauseResumeConfirm")
-    
+
     ; 确保保存所有其他功能设置
     IniWrite(uCtrl["dcPause"]["enable"].Value, file, section, "DcPauseEnable")
-    IniWrite(uCtrl["shiftUse"]["enable"].Value, file, section, "ShiftEnabled")
-    
+    IniWrite(uCtrl["shift"]["enable"].Value, file, section, "ShiftEnabled")
+
     ; 保存技能键设置
-    IniWrite(uCtrl["huodun"]["key"].Value, file, section, "HuoDunKey")
-    IniWrite(uCtrl["dianmao"]["key"].Value, file, section, "DianMaoKey")
-    IniWrite(uCtrl["dianqiu"]["key"].Value, file, section, "DianQiuKey")
-    IniWrite(uCtrl["bindun"]["key"].Value, file, section, "BinDunKey")
-    
+    IniWrite(uCtrl["huoDun"]["key"].Value, file, section, "HuoDunKey")
+    IniWrite(uCtrl["dianMao"]["key"].Value, file, section, "DianMaoKey")
+    IniWrite(uCtrl["dianQiu"]["key"].Value, file, section, "DianQiuKey")
+    IniWrite(uCtrl["binDun"]["key"].Value, file, section, "BinDunKey")
+
     ; 保存其他全局设置
     IniWrite(buffThreshold.Value, file, section, "BuffThreshold")
     IniWrite(sleepInput.Value, file, section, "SnapSleepDelay")
@@ -1895,7 +1979,7 @@ SaveuSkillSettings(file, profileName) {
  */
 LoadSettings(settingsFile := "", profileName := "默认") {
     global statusBar
-    
+
     if (settingsFile = "")
         settingsFile := A_ScriptDir "\settings.ini"
 
@@ -1906,10 +1990,10 @@ LoadSettings(settingsFile := "", profileName := "默认") {
             if (!DirExist(settingsDir) && settingsDir != "") {
                 DirCreate(settingsDir)
             }
-            
+
             FileAppend("[Profiles]`nList=默认`n`n[Global]`nLastUsedProfile=" profileName "`n`n", settingsFile)
             statusBar.Text := "已创建新的设置文件"
-            
+
             ; 保存当前设置以初始化文件
             SaveSettings(settingsFile, profileName)
             return
@@ -1924,7 +2008,7 @@ LoadSettings(settingsFile := "", profileName := "默认") {
         LoadSkillSettings(settingsFile, profileName)
         LoadMouseSettings(settingsFile, profileName)
         LoaduSkillSettings(settingsFile, profileName)
-        
+
         ; 每个配置都应用自己的热键和自动启停
         LoadGlobalHotkey()
         statusBar.Text := "设置已加载"
@@ -1941,31 +2025,31 @@ LoadSkillSettings(file, profileName) {
     global cSkill
     section := profileName "_Skills"
 
-    Loop 5 {
+    loop 5 {
         try {
             key := IniRead(file, section, "Skill" A_Index "Key", A_Index)
             enabled := IniRead(file, section, "Skill" A_Index "Enable", 1)
             interval := IniRead(file, section, "Skill" A_Index "Interval", 20)
             mode := Integer(IniRead(file, section, "Skill" A_Index "Mode", 1))
 
-            cSkill[A_Index].key.Value := key
-            cSkill[A_Index].enable.Value := enabled
-            cSkill[A_Index].interval.Value := interval
+            cSkill[A_Index]["key"].Value := key
+            cSkill[A_Index]["enable"].Value := enabled
+            cSkill[A_Index]["interval"].Value := interval
 
             ; 设置模式下拉框
             try {
                 if (mode >= 1 && mode <= 3) {
-                    cSkill[A_Index].mode.Value := mode
+                    cSkill[A_Index]["mode"].Value := mode
                 }
             } catch as err {
-                cSkill[A_Index].mode.Value := 1
+                cSkill[A_Index]["mode"].Value := 1
             }
         } catch as err {
             ; 如果读取失败，使用默认值
-            cSkill[A_Index].key.Value := A_Index
-            cSkill[A_Index].enable.Value := 1
-            cSkill[A_Index].interval.Value := 20
-            cSkill[A_Index].mode.Value := 1
+            cSkill[A_Index]["key"].Value := A_Index
+            cSkill[A_Index]["enable"].Value := 1
+            cSkill[A_Index]["interval"].Value := 20
+            cSkill[A_Index]["mode"].Value := 1
         }
     }
 }
@@ -2032,14 +2116,14 @@ LoaduSkillSettings(file, profileName) {
             uCtrl["dodge"]["enable"].Value := IniRead(file, section, "DodgeEnable", "0")
             uCtrl["dodge"]["interval"].Value := IniRead(file, section, "DodgeInterval", "20")
         }
-        
+
         ; 加载喝药设置
         if (uCtrl.Has("potion")) {
             uCtrl["potion"]["key"].Value := IniRead(file, section, "PotionKey", "q")
             uCtrl["potion"]["enable"].Value := IniRead(file, section, "PotionEnable", "0")
             uCtrl["potion"]["interval"].Value := IniRead(file, section, "PotionInterval", "3000")
         }
-        
+
         ; 加载强移设置
         if (uCtrl.Has("forceMove")) {
             uCtrl["forceMove"]["key"].Value := IniRead(file, section, "ForceMoveKey", "f")
@@ -2071,15 +2155,15 @@ LoaduSkillSettings(file, profileName) {
         thresholdValue := IniRead(file, section, "BuffThreshold", "100")
         buffThreshold.Value := thresholdValue
         buffThresholdValue.Text := thresholdValue
-        
+
         sleepInput.Value := IniRead(file, section, "SnapSleepDelay", "2700")
-        
+
         ; 加载全局热键
         hotkeyControl.Value := IniRead(file, section, "StartStopKey", "F1")
         modeValue := Integer(IniRead(file, section, "RunMod", 1))
-            if (modeValue = 1 || modeValue = 2) {
+        if (modeValue = 1 || modeValue = 2) {
             RunMod.Value := modeValue  ; 使用正确的控件变量
-        }       
+        }
     } catch as err {
     }
 }
@@ -2092,7 +2176,7 @@ LoaduSkillSettings(file, profileName) {
  */
 LoadGlobalHotkey() {
     global currentHotkey, hotkeyControl, statusBar
-    
+
     ; 处理空热键值
     if (hotkeyControl.Value = "") {
         ; 将热键恢复为之前的值或默认值
@@ -2100,19 +2184,19 @@ LoadGlobalHotkey() {
         statusBar.Text := "热键不能为空，已恢复为: " hotkeyControl.Value
         return
     }
-    
+
     try {
         ; 移除旧热键绑定
         if (currentHotkey != "") {
             Hotkey(currentHotkey, ToggleMacro, "Off")
         }
-        
+
         ; 获取并验证新热键
         newHotkey := hotkeyControl.Value
-      
+
         ; 注册新热键
         Hotkey(newHotkey, ToggleMacro, "On")
-        currentHotkey := newHotkey 
+        currentHotkey := newHotkey
         ; 更新状态栏
         statusBar.Text := "热键已更新: " newHotkey
     } catch as err {
@@ -2125,7 +2209,7 @@ LoadGlobalHotkey() {
 ; ==================== 热键处理 ====================
 #HotIf WinActive("ahk_class Diablo IV Main Window Class")
 
-F3::{
+F3:: {
     ; 确保从配置对象获取最新值
     dianQiuKey := uCtrl["dianQiu"]["key"].Value
     huoDunKey := uCtrl["huoDun"]["key"].Value
@@ -2142,12 +2226,12 @@ F3::{
         ; 执行连招
         Send "{Blind}{" binDunKey "}"  ; 使用Blind模式保持Shift状态
         Sleep 75
-        Loop 4 {
+        loop 4 {
             Send "{Blind}{" dianQiuKey "}"
             Sleep 850
         }
         Send "{Blind}{" huoDunKey "}"
-        Sleep sleepD 
+        Sleep sleepD
         Send "{Blind}{" dianMaoKey "}"
         Sleep 550
         ToggleMacro()
@@ -2161,11 +2245,12 @@ F3::{
     global isRunning, uCtrl, isPaused
     static lastClickTime := 0
 
-    if (!isRunning || !uCtrl.Has("dcPause") || !uCtrl["dcPause"].Has("enable") || uCtrl["dcPause"]["enable"].Value != 1)
+    if (!isRunning || !uCtrl.Has("dcPause") || !uCtrl["dcPause"].Has("enable") || uCtrl["dcPause"]["enable"].Value != 1
+    )
         return
-        
+
     currentTime := A_TickCount
-    
+
     if (currentTime - lastClickTime < 400) {
         TogglePause("doubleClick", true)
         SetTimer(() => TogglePause("doubleClick", false), -2000)
