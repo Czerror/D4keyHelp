@@ -279,15 +279,30 @@ CreateAllControls() {
         ; ctrl.OnEvent("Change", (c,*) => ValidateRange(c))
     }
 }
+
 ValidateRange(ctrl, min := 1, max := 9) {
-    try val := Integer(ctrl.Value)
-    catch
-        val := min
-    if (val < min)
+    global statusBar
+
+    try {
+        val := Integer(ctrl.Value)
+        if (val < min) {
+            ctrl.Value := min
+            statusBar.Text := "确认次数不能小于" min "，已调整为" min
+        }
+        else if (val > max) {
+            ctrl.Value := max
+            statusBar.Text := "确认次数不能大于" max "，已调整为" max
+        }
+        else {
+            ; 输入有效时提示用户设置已更新
+            statusBar.Text := "确认次数已更新为: " val
+        }
+    } catch {
         ctrl.Value := min
-    else if (val > max)
-        ctrl.Value := max
+        statusBar.Text := "请输入有效数字，已设为默认值" min
+    }
 }
+
 /**
  * 更新卡快照延迟
  */
@@ -683,17 +698,16 @@ RefreshDetection(*) {
 }
 
 /**
- * 清理像素缓存的辅助函数
+ * 强制清理像素缓存的辅助函数
+ * 通过直接重置缓存变量来实现，比原方法更高效可靠
  */
 CleanPixelCache() {
-    ; 通过调用GetPixelRGB并让时间超过缓存清理阈值来触发清理
-    try {
-        GetPixelRGB(0, 0)  ; 采样一个点
-        Sleep 501  ; 略大于缓存清理时间(500ms)
-        GetPixelRGB(1, 1)  ; 再采样一个点触发清理
-    } catch {
-        ; 忽略任何错误
-    }
+    static lastCacheClear := 0
+    static pixelCache := Map()
+    
+    ; 直接重置缓存Map和清理时间
+    pixelCache := Map()
+    lastCacheClear := A_TickCount
 }
 
 /**
@@ -725,9 +739,8 @@ StartAutoMove() {
  * @param {Object} pos - BUFF检测坐标对象（可选）
  * @param {String} type - "key"、"mouse" 或 "uSkill"
  * @param {String} mouseBtn - 鼠标按钮名（如"left"/"right"，仅type为mouse时用）
- * @param {String} description - 按键描述（用于日志）
  */
-HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", description := "") {
+HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
     global uCtrl, buffThreshold, holdStates
     static lastReholdTime := Map()
     static REHOLD_MIN_INTERVAL := 2000
@@ -766,11 +779,15 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", descript
                 holdStates[uniqueKey] := true
                 lastReholdTime[uniqueKey] := currentTime
             }
-            else if (!lastReholdTime.Has(uniqueKey) ||
-            (currentTime - lastReholdTime[uniqueKey] > REHOLD_MIN_INTERVAL)) {
-                needPress := true
-                lastReholdTime[uniqueKey] := currentTime
-            }
+            else {
+                    ; 安全时间差计算
+                    lastTime := lastReholdTime.Get(uniqueKey, 0)
+                    timeDiff := (currentTime - lastTime) & 0xFFFFFFFF
+                    if (timeDiff > REHOLD_MIN_INTERVAL) {
+                        needPress := true
+                        lastReholdTime[uniqueKey] := currentTime
+                    }
+                }
 
             if (needPress) {
                 if (shiftEnabled && !isHeld)
@@ -810,7 +827,7 @@ FillKeyQueue() {
                 cSkill[idx]["key"].Value,
                 cSkill[idx]["mode"].Value,
                 bSkill.Has(idx) ? bSkill[idx] : "",
-                "key", "", "技能" idx,
+                "key", "",
                 Integer(cSkill[idx]["interval"].Value)
             )
         }
@@ -822,7 +839,7 @@ FillKeyQueue() {
                 btn,
                 mSkill[btn]["mode"].Value,
                 bSkill.Has(btn) ? bSkill[btn] : "",
-                "mouse", btn, "鼠标" btn,
+                "mouse", btn,
                 Integer(mSkill[btn]["interval"].Value)
             )
         }
@@ -834,7 +851,7 @@ FillKeyQueue() {
                 uCtrl[u]["key"].Value,
                 1,
                 bSkill.Has(u) ? bSkill[u] : "",
-                "key", "", u,
+                "key", "",
                 Integer(uCtrl[u]["interval"].Value)
             )
         }
@@ -844,92 +861,101 @@ FillKeyQueue() {
 /**
  * 添加到队列的通用函数
  */
-EnqueueKey(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", description := "", interval := 1000) {
+/**
+ * 高频优化的键位入队函数
+ * 严格遵循AHK v2.0.19语法
+ */
+EnqueueKey(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", interval := 1000) {
     global keyQueue
-    ; 生成唯一ID
+    static maxLen := 20
+    
+    ; 快速生成唯一ID
     uniqueId := type ":" (type = "mouse" ? mouseBtn : keyOrBtn)
-
-    ; 优先级计算
     priority := GetPriorityFromMode(mode)
+    now := A_TickCount
 
-    ; 检查队列中是否已有相同唯一ID的操作
+    ; 快速查找现有项
     existingIndex := 0
-    for i, existingItem in keyQueue {
-        existingId := existingItem.Get("type") ":" (existingItem.Get("type") = "mouse" ? existingItem.Get("mouseBtn") :
-            existingItem.Get("keyOrBtn"))
-        if (existingId = uniqueId) {
-            existingIndex := i
+    loop keyQueue.Length {
+        if (keyQueue[A_Index].type ":" 
+           (keyQueue[A_Index].type = "mouse" ? keyQueue[A_Index].mouseBtn : keyQueue[A_Index].keyOrBtn) = uniqueId) {
+            existingIndex := A_Index
             break
         }
     }
 
-    ; 创建或更新项
-    item := Map(
-        "keyOrBtn", keyOrBtn,
-        "mode", mode,
-        "pos", pos,
-        "type", type,
-        "mouseBtn", mouseBtn,
-        "description", description,
-        "time", A_TickCount,
-        "interval", interval,
-        "priority", priority
-    )
-
-    ; 如果存在，先移除旧项
-    if (existingIndex > 0) {
-        keyQueue.RemoveAt(existingIndex)
+    ; 创建新项
+    item := { 
+        keyOrBtn: keyOrBtn,
+        mode: mode,
+        pos: pos,
+        type: type,
+        mouseBtn: mouseBtn,
+        time: now,
+        interval: interval,
+        priority: priority
     }
 
-    ; 队列长度限制逻辑 - 当新项要添加且队列已满时检查
-    maxLen := 20
+    ; 移除现有项
+    if (existingIndex > 0)
+        keyQueue.RemoveAt(existingIndex)
+
+    ; 队列满处理
     if (keyQueue.Length >= maxLen) {
-        ; 找到优先级最低的项
-        lowestPriority := 999
+        lowestPriority := priority
         lowestIndex := 0
-        for i, queueItem in keyQueue {
-            if (queueItem.Get("priority") < lowestPriority) {
-                lowestPriority := queueItem.Get("priority")
-                lowestIndex := i
+        
+        ; 单次遍历查找最低优先级项
+        loop keyQueue.Length {
+            idx := A_Index
+            qItem := keyQueue[idx]
+            if (qItem.priority < lowestPriority || 
+               (qItem.priority == lowestPriority && qItem.time < (lowestIndex ? keyQueue[lowestIndex].time : 0))) {
+                lowestPriority := qItem.priority
+                lowestIndex := idx
             }
         }
-        if (lowestIndex > 0 && priority > lowestPriority) {
+        
+        if (lowestIndex > 0 && priority >= lowestPriority)
             keyQueue.RemoveAt(lowestIndex)
-        } else if (existingIndex == 0) {
-            return ; 新项优先级不够高，且不是更新操作
-        }
+        else if (existingIndex == 0)
+            return
     }
 
-    ; 边界情况处理
+    ; 快速插入处理
     if (keyQueue.Length == 0) {
         keyQueue.Push(item)
         return
     }
 
-    ; 优化的二分查找插入
+    ; 优化二分查找
     left := 1
     right := keyQueue.Length
-
-    ; 处理边界情况
-    if (priority > keyQueue[1].Get("priority")) {
-        keyQueue.InsertAt(1, item)  ; 比第一个还高优先级
+    
+    ; 边界检查
+    firstPriority := keyQueue[1].priority
+    lastPriority := keyQueue[right].priority
+    
+    if (priority > firstPriority) {
+        keyQueue.InsertAt(1, item)
         return
-    } else if (priority <= keyQueue[right].Get("priority")) {
-        keyQueue.Push(item)  ; 比最后一个还低优先级
+    }
+    if (priority <= lastPriority) {
+        keyQueue.Push(item)
         return
     }
 
-    ; 标准二分查找
+    ; 核心二分逻辑
     while (right - left > 1) {
-        mid := Floor((left + right) / 2)
-        if (priority > keyQueue[mid].Get("priority")) {
+        mid := (left + right) >> 1  ; 位运算替代除法
+        midItem := keyQueue[mid]
+        if (priority > midItem.priority || 
+           (priority == midItem.priority && now > midItem.time))
             right := mid
-        } else {
+        else
             left := mid
-        }
     }
 
-    ; 在正确的位置插入
     keyQueue.InsertAt(right, item)
 }
 
@@ -944,58 +970,58 @@ GetPriorityFromMode(mode) {
 }
 
 /**
- * 队列处理定时器（精准间隔支持）
+ * 高频优化的队列处理器
+ * @description 处理队列中的按键事件，优化了时间差计算和队列更新
  */
 KeyQueueWorker() {
     global keyQueue, keyQueueLastExec
+    
+    ; 快速初始化检查
+    if !IsObject(keyQueue)
+        keyQueue := []
+    if !IsObject(keyQueueLastExec)
+        keyQueueLastExec := Map()
+
+    static critSection := 0
     now := A_TickCount
-    queueCopy := keyQueue.Clone()
-    keyQueue := []  ; 完全清空队列
+    pendingItems := []
+    remainingItems := []
 
-    pendingItems := []  ; 用于存储需要重新入队的项
+    ; 轻量级临界区 (无超时设置)
+    if (critSection)
+        return
+    critSection := 1
 
-    for item in queueCopy {
-        ; 统一uniqueId格式
-        uniqueId := item.Get("type") ":" (item.Get("type") = "mouse" ? item.Get("mouseBtn") : item.Get("keyOrBtn"))
+    ; 快速队列处理
+    loop keyQueue.Length {
+        item := keyQueue[A_Index]
+        uniqueId := item.type ":" (item.type = "mouse" ? item.mouseBtn : item.keyOrBtn)
         lastExec := keyQueueLastExec.Get(uniqueId, 0)
-
-        if (now - lastExec >= item.Get("interval")) {
-            HandleKeyMode(
-                item.Get("keyOrBtn"),
-                item.Get("mode"),
-                item.Get("pos"),
-                item.Get("type"),
-                item.Get("mouseBtn"),
-                item.Get("description")
-            )
-            keyQueueLastExec[uniqueId] := now  ; 更新执行时间
-
-            ; 将执行后需要重新入队的项添加到待处理列表，而不是立即处理
-            pendingItems.Push({
-                keyOrBtn: item.Get("keyOrBtn"),
-                mode: item.Get("mode"),
-                pos: item.Get("pos"),
-                type: item.Get("type"),
-                mouseBtn: item.Get("mouseBtn"),
-                description: item.Get("description"),
-                interval: item.Get("interval")
-            })
+        
+        ; 优化时间差计算
+        timeDiff := (now - lastExec) & 0xFFFFFFFF
+        if (timeDiff >= item.interval) {
+            HandleKeyMode(item.keyOrBtn, item.mode, item.pos, item.type, item.mouseBtn)
+            keyQueueLastExec[uniqueId] := now
+            pendingItems.Push(item)
         } else {
-            ; 间隔未到，保留在队列
-            keyQueue.Push(item)
+            remainingItems.Push(item)
         }
     }
 
-    ; 在队列处理完成后，重新添加需要再次执行的项
-    for pendingItem in pendingItems {
+    ; 原子化队列更新
+    keyQueue := remainingItems
+    critSection := 0
+
+    ; 高效重新入队
+    for item in pendingItems {
         EnqueueKey(
-            pendingItem.keyOrBtn,
-            pendingItem.mode,
-            pendingItem.pos,
-            pendingItem.type,
-            pendingItem.mouseBtn,
-            pendingItem.description,
-            pendingItem.interval
+            item.keyOrBtn,
+            item.mode,
+            item.pos,
+            item.type,
+            item.mouseBtn,
+            item.interval
         )
     }
 }
@@ -1014,13 +1040,14 @@ PressSkillCallback(skillId) {
     }
     if (cSkill[skillId]["enable"].Value != 1)
         return
+    config := cSkill[skillId]
     key := cSkill[skillId]["key"].Value
     mode := cSkill[skillId]["mode"].Value
     pos := bSkill.Has(skillId) ? bSkill[skillId] : ""
-    interval := Integer(cSkill[skillId]["interval"].Value)
+    interval := Integer(config["interval"].Value)
     boundFunc := (RunMod.Value == 1)
-        ? HandleKeyMode.Bind(key, mode, pos, "key", "", "技能" skillId)
-        : EnqueueKey.Bind(key, mode, pos, "key", "", "技能" skillId, interval)
+        ? HandleKeyMode.Bind(key, mode, pos, "key", "")
+        : EnqueueKey.Bind(key, mode, pos, "key", "", interval)
     skillTimers[timerKey] := boundFunc
     SetTimer(boundFunc, interval)
 }
@@ -1043,8 +1070,8 @@ PressMouseCallback(mouseBtn) {
     pos := bSkill.Has(mouseBtn) ? bSkill[mouseBtn] : ""
     interval := Integer(config["interval"].Value)
     boundFunc := (RunMod.Value == 1)
-        ? HandleKeyMode.Bind(mouseBtn, mode, pos, "mouse", mouseBtn, "鼠标" mouseBtn)
-        : EnqueueKey.Bind(mouseBtn, mode, pos, "mouse", mouseBtn, "鼠标" mouseBtn, interval)
+        ? HandleKeyMode.Bind(mouseBtn, mode, pos, "mouse", mouseBtn)
+        : EnqueueKey.Bind(mouseBtn, mode, pos, "mouse", mouseBtn, interval)
     skillTimers[timerKey] := boundFunc
     SetTimer(boundFunc, interval)
 }
@@ -1068,8 +1095,8 @@ PressuSkillKey(uSkillId) {
     pos := bSkill.Has(uSkillId) ? bSkill[uSkillId] : ""
     interval := Integer(config["interval"].Value)
     boundFunc := (RunMod.Value == 1)
-        ? HandleKeyMode.Bind(key, 1, pos, "key", "", uSkillId)
-        : EnqueueKey.Bind(key, 1, pos, "key", "", uSkillId, interval)
+        ? HandleKeyMode.Bind(key, 1, pos, "key", "")
+        : EnqueueKey.Bind(key, 1, pos, "key", "", interval)
     skillTimers[timerKey] := boundFunc
     SetTimer(boundFunc, interval)
 
@@ -1103,12 +1130,12 @@ MoveMouseToNextPoint() {
 
         ; 计算六个点的位置
         points := [
-        { x: Round(0.15 * res.D4W), y: Round(0.15 * res.D4H) },  ; 左上角
-        { x: Round(0.5 * res.D4W), y: Round(0.15 * res.D4H) },   ; 中上角
-        { x: Round(0.85 * res.D4W), y: Round(0.15 * res.D4H) },  ; 右上角
-        { x: Round(0.85 * res.D4W), y: Round(0.85 * res.D4H) },  ; 右下角
-        { x: Round(0.5 * res.D4W), y: Round(0.85 * res.D4H) },   ; 中下角
-        { x: Round(0.15 * res.D4W), y: Round(0.85 * res.D4H) }   ; 左下角
+        { x: Round(0.15 * res["D4W"]), y: Round(0.15 * res["D4H"]) },  ; 左上角
+        { x: Round(0.5 * res["D4W"]), y: Round(0.15 * res["D4H"]) },   ; 中上角
+        { x: Round(0.85 * res["D4W"]), y: Round(0.15 * res["D4H"]) },  ; 右上角
+        { x: Round(0.85 * res["D4W"]), y: Round(0.85 * res["D4H"]) },  ; 右下角
+        { x: Round(0.5 * res["D4W"]), y: Round(0.85 * res["D4H"]) },   ; 中下角
+        { x: Round(0.15 * res["D4W"]), y: Round(0.85 * res["D4H"]) }   ; 左下角
         ]
 
         ; 确保currentPoint字段存在
@@ -1165,30 +1192,49 @@ OnWindowChange(isActive) {
 
 /**
  * 获取窗口分辨率并计算缩放比例
- * @returns {Object} - 包含分辨率和缩放比例的对象 {width, height, scaleW, scaleH, scale}
+ * @param D44KW {Integer} 参考分辨率宽度(默认3840，即4K宽度)
+ * @param D44KH {Integer} 参考分辨率高度(默认2160，即4K高度)
+ * @param D44KWC {Integer} 参考分辨率中心X坐标(默认1920)
+ * @param D44KHC {Integer} 参考分辨率中心Y坐标(默认1080)
+ * @returns {Map} 包含窗口尺寸和缩放比例信息的Map对象
  */
-GetWindowResolutionAndScale() {
-    BASE_WIDTH := 3840
-    BASE_HEIGHT := 2160
-    D4W := 0, D4H := 0
+GetWindowResolutionAndScale(D44KW := 3840, D44KH := 2160, D44KWC := 1920, D44KHC := 1080) {
+    D4Windows := Map(
+        "D4W", 0.0,       ; 客户区实际宽度
+        "D4H", 0.0,       ; 客户区实际高度
+        "CD4W", 0.0,      ; 客户区中心X坐标（浮点）
+        "CD4H", 0.0,      ; 客户区中心Y坐标（浮点）
+        "D4S", 1.0,       ; 统一缩放比例（Min(D4SW,D4SH)）
+        "D4SW", 1.0,      ; 宽度独立缩放比例
+        "D4SH", 1.0,       ; 高度独立缩放比例
+        "D44KW", D44KW,    ; 添加参考分辨率宽度到返回Map
+        "D44KH", D44KH,    ; 添加参考分辨率高度到返回Map
+        "D44KWC", D44KWC,  ; 添加参考中心X坐标到返回Map
+        "D44KHC", D44KHC   ; 添加参考中心Y坐标到返回Map
+    )
 
-    ; 获取窗口分辨率
     if WinExist("ahk_class Diablo IV Main Window Class") {
-        WinGetPos(, , &D4W, &D4H, "ahk_class Diablo IV Main Window Class")
+        hWnd := WinGetID("ahk_class Diablo IV Main Window Class")
+        rect := Buffer(16)
+
+        if DllCall("GetClientRect", "Ptr", hWnd, "Ptr", rect) {
+            ; 获取实际客户区尺寸
+            D4Windows["D4W"] := NumGet(rect, 8, "Int") - NumGet(rect, 0, "Int")
+            D4Windows["D4H"] := NumGet(rect, 12, "Int") - NumGet(rect, 4, "Int")
+
+            ; 计算精确的中心点（浮点）
+            D4Windows["CD4W"] := D4Windows["D4W"] / 2
+            D4Windows["CD4H"] := D4Windows["D4H"] / 2
+
+            ; 计算独立缩放比例
+            D4Windows["D4SW"] := D4Windows["D4W"] / D44KW
+            D4Windows["D4SH"] := D4Windows["D4H"] / D44KH
+            ; 计算统一缩放比例
+            D4Windows["D4S"] := Min(D4Windows["D4SW"], D4Windows["D4SH"])
+        }
     }
 
-    ; 计算缩放比例
-    scaleW := D4W / BASE_WIDTH
-    scaleH := D4H / BASE_HEIGHT
-    scale := Min(scaleW, scaleH)
-
-    return {
-        D4W: D4W,       ; 窗口宽度
-        D4H: D4H,      ; 窗口高度
-        scaleW: scaleW,   ; 宽度缩放比例
-        scaleH: scaleH,   ; 高度缩放比例
-        scale: scale      ; 最终缩放比例（取宽高比例的最小值）
-    }
+    return D4Windows
 }
 
 /**
@@ -1198,25 +1244,17 @@ GetWindowResolutionAndScale() {
 GetDynamicbSkill() {
     global bSkill
     res := GetWindowResolutionAndScale()
-    baseX := 1550, baseY := 1940, offset := 127
-
-    ; 清空并填充技能位置
+    
     bSkill.Clear()
-    loop 5 {
+    loop 6 {
         idx := A_Index
         bSkill[idx] := {
-            x: Round((baseX + offset * (idx - 1)) * res.scale),
-            y: Round(baseY * res.scale)
+            x: Round(res["CD4W"] + (1550 - res["D44KWC"] + 127 * (idx - 1)) * res["D4SW"]),
+            y: Round(res["CD4H"] + (1940 - res["D44KHC"]) * res["D4SH"])
         }
     }
-    bSkill["left"] := {
-        x: Round((baseX + offset * 4) * res.scale),
-        y: Round(baseY * res.scale)
-    }
-    bSkill["right"] := {
-        x: Round((baseX + offset * 5) * res.scale),
-        y: Round(baseY * res.scale)
-    }
+    bSkill["left"] := bSkill[5]
+    bSkill["right"] := bSkill[6]
 }
 
 ; ==================== 像素检测与暂停机制 ====================
@@ -1227,16 +1265,20 @@ GetDynamicbSkill() {
  */
 CheckKeyPoints(res, pixelCache := unset) {
     try {
-        dfx := Round(1535 * res.scaleW), dty := Round(1880 * res.scaleH)
-        tabx := Round(3795 * res.scaleW), tab := Round(90 * res.scaleH)
+        dfx := Round(res["CD4W"] + (1535 - res["D44KWC"]) * res["D4SW"])
+        dty := Round(res["CD4H"] + (1880 - res["D44KHC"]) * res["D4SH"])
+        tabx := Round(res["CD4W"] + (3795 - res["D44KWC"]) * res["D4SW"])
+        taby := Round(res["CD4H"] + (90 - res["D44KHC"]) * res["D4SH"])
+        
         colorDFX := (IsSet(pixelCache) && pixelCache.Has("dfx")) ? pixelCache["dfx"] : GetPixelRGB(dfx, dty)
-        colorTAB := (IsSet(pixelCache) && pixelCache.Has("tab")) ? pixelCache["tab"] : GetPixelRGB(tabx, tab)
+        colorTAB := (IsSet(pixelCache) && pixelCache.Has("tab")) ? pixelCache["tab"] : GetPixelRGB(tabx, taby)
+        
         return {
             dfxcolor: colorDFX,
             tabcolor: colorTAB,
             isBlueColor: (colorDFX.r + 50 < colorDFX.b && colorDFX.b >= 100),
             isRedColor: (colorTAB.r > 100 && colorTAB.g < 60 && colorTAB.b < 60),
-            positions: { dfx: dfx, dty: dty, tabx: tabx, tab: tab }
+            positions: { dfx: dfx, dty: dty, tabx: tabx, taby: taby }
         }
     } catch {
         return {
@@ -1257,45 +1299,50 @@ CheckKeyPoints(res, pixelCache := unset) {
 CheckPauseByEnter(res := unset, pixelCache := unset) {
     if !IsSet(res)
         res := GetWindowResolutionAndScale()
-    baseX := Round(50 * res.scaleW)
-    baseY := Round(1440 * res.scaleH)
-    offset := Round(90 * res.scaleW)
-    grayX := Round(150 * res.scaleW)
-    grayY := Round(2070 * res.scaleH)
-    grayKey := "enterGray"
-    grayColor := (IsSet(pixelCache) && pixelCache.Has(grayKey)) ? pixelCache[grayKey] : GetPixelRGB(grayX, grayY)
+    
+    ; 直接计算最终坐标
+    grayColor := (IsSet(pixelCache) && pixelCache.Has("enterGray")) 
+        ? pixelCache["enterGray"] 
+        : GetPixelRGB(
+            Round(res["CD4W"] + (150 - res["D44KWC"]) * res["D4SW"]),
+            Round(res["CD4H"] + (2070 - res["D44KHC"]) * res["D4SH"])
+        )
+    
     loop 6 {
-        x := Round(baseX + offset * (A_Index - 1))
-        key := "enter" A_Index
-        colorObj := (IsSet(pixelCache) && pixelCache.Has(key)) ? pixelCache[key] : GetPixelRGB(x, baseY)
+        x := Round(res["CD4W"] + (50 - res["D44KWC"] + 90 * (A_Index - 1)) * res["D4SW"])
+        colorObj := (IsSet(pixelCache) && pixelCache.Has("enter" A_Index)) 
+            ? pixelCache["enter" A_Index] 
+            : GetPixelRGB(x, Round(res["CD4H"] + (1440 - res["D44KHC"]) * res["D4SH"]))
+        
         if (colorObj.r > (colorObj.g + colorObj.b) * 8 && colorObj.r > 60) {
             return (grayColor.r < 100 && grayColor.g < 85 && grayColor.b < 85)
         }
     }
     return false
 }
+
+
 /**
- * 专用的血条检测函数
- * 支持像素缓存，提前返回
+ * 血条检测函数 - AHK v2.0.19语法标准版
+ * @param res {Map} 窗口分辨率信息(可选)
+ * @param pixelCache {Map} 像素缓存(可选)
+ * @returns {Boolean} 是否检测到血条
  */
 CheckPauseByBlood(res := unset, pixelCache := unset) {
     if !IsSet(res)
         res := GetWindowResolutionAndScale()
+    
     try {
-        ; 定义检测点坐标
-        xs := [Round(1605 * res.scaleW), Round(1435 * res.scaleW)]
-        ys := [Round(85 * res.scaleH), Round(95 * res.scaleH)]
         hitCount := 0
-        neededHits := 2
         loop 2 {
-            x := xs[A_Index]
+            x := Round(res["CD4W"] + ([1605, 1435][A_Index] - res["D44KWC"]) * res["D4SW"])
             loop 2 {
-                y := ys[A_Index]
+                y := Round(res["CD4H"] + ([85, 95][A_Index] - res["D44KHC"]) * res["D4SH"])
                 key := "blood" ((A_Index - 1) * 2 + A_Index)
                 color := (IsSet(pixelCache) && pixelCache.Has(key)) ? pixelCache[key] : GetPixelRGB(x, y)
                 if (color.r > (color.g + color.b) * 2 && color.r > 100)
                     hitCount++
-                if (hitCount >= neededHits)
+                if (hitCount >= 2)
                     return true
             }
         }
@@ -1304,6 +1351,7 @@ CheckPauseByBlood(res := unset, pixelCache := unset) {
         return false
     }
 }
+
 /**
  * 定时检测血条并自动暂停/启动宏
  */
@@ -1313,32 +1361,19 @@ AutoPauseByBlood() {
     static resumeHitCount := 0
 
     ; 读取多次确认次数（带默认值和容错）
-    PAUSE_CONFIRM := uCtrl["ipPause"].Has("pauseConfirm") ? Max(1, Integer(uCtrl["ipPause"]["pauseConfirm"].Value)) : 5
-    RESUME_CONFIRM := uCtrl["ipPause"].Has("resumeConfirm") ? Max(1, Integer(uCtrl["ipPause"]["resumeConfirm"].Value)) :
-        2
+    PAUSE_CONFIRM := uCtrl["ipPause"].Has("pauseConfirm") ? Max(1, Min(9, Integer(uCtrl["ipPause"]["pauseConfirm"].Value))) : 5
+    RESUME_CONFIRM := uCtrl["ipPause"].Has("resumeConfirm") ? Max(1, Min(9, Integer(uCtrl["ipPause"]["resumeConfirm"].Value))) : 2
 
     if (!isRunning || uCtrl["ipPause"]["enable"].Value != 1)
         return
 
+    ; 复用CheckPauseByBlood函数进行检测
     res := GetWindowResolutionAndScale()
-    xs := [Round(1605 * res.scaleW), Round(1435 * res.scaleW)]
-    ys := [Round(85 * res.scaleH), Round(95 * res.scaleH)]
-    hitCount := 0
-
-    loop 2 {
-        x := xs[A_Index]
-        loop 2 {
-            y := ys[A_Index]
-            color := GetPixelRGB(x, y)
-            if (color.r > (color.g + color.b) * 2 && color.r > 100)
-                hitCount++
-            if (hitCount >= 2)
-                break 2
-        }
-    }
+    pixelCache := Map()
+    bloodDetected := CheckPauseByBlood(res, pixelCache)
 
     if (isPaused["blood"]) {
-        if (hitCount >= 2) {
+        if (bloodDetected) {
             resumeHitCount++
             pauseMissCount := 0
             if (resumeHitCount >= RESUME_CONFIRM) {
@@ -1350,7 +1385,7 @@ AutoPauseByBlood() {
             resumeHitCount := 0
         }
     } else {
-        if (hitCount < 2) {
+        if (!bloodDetected) {
             pauseMissCount++
             resumeHitCount := 0
             if (pauseMissCount >= PAUSE_CONFIRM) {
@@ -1363,6 +1398,7 @@ AutoPauseByBlood() {
         }
     }
 }
+
 /**
  * 定时检测界面状态并自动暂停/启动宏
  * 检测TAB键打开的界面和对话框
@@ -1373,10 +1409,8 @@ AutoPauseByTAB() {
     static resumeHitCount := 0
 
     ; 读取多次确认次数（带默认值和容错）
-    PAUSE_CONFIRM := uCtrl["tabPause"].Has("pauseConfirm") ? Max(1, Integer(uCtrl["tabPause"]["pauseConfirm"].Value)) :
-        2
-    RESUME_CONFIRM := uCtrl["tabPause"].Has("resumeConfirm") ? Max(1, Integer(uCtrl["tabPause"]["resumeConfirm"].Value)) :
-        2
+    PAUSE_CONFIRM := uCtrl["tabPause"].Has("pauseConfirm") ? Max(1, Min(9, Integer(uCtrl["tabPause"]["pauseConfirm"].Value))) : 2
+    RESUME_CONFIRM := uCtrl["tabPause"].Has("resumeConfirm") ? Max(1, Min(9, Integer(uCtrl["tabPause"]["resumeConfirm"].Value))) : 2
 
     ; 如果宏未运行或界面检测未启用，则直接返回
     if (!isRunning || uCtrl["tabPause"]["enable"].Value != 1)
@@ -1427,10 +1461,9 @@ AutoPauseByTAB() {
         } else {
             pauseMissCount := 0
         }
-    } catch as err {
-        DebugLog("AutoPauseByTAB错误: " err.Message)
     }
 }
+
 /**
  * 检测技能激活状态
  * @param {Integer} x - 检测点X坐标
@@ -1459,7 +1492,7 @@ IsSkillActive(x, y) {
  */
 GetPixelRGB(x, y) {
     static pixelCache := Map()           ; 缓存最近采样的像素
-    static cacheLifetime := 20           ; 缓存有效期(毫秒)
+    static cacheLifetime := 100           ; 缓存有效期(毫秒)
     static lastCacheClear := 0           ; 最后一次缓存清理时间
     static currentTime := A_TickCount    ; 当前时间
     static cacheStats := { hits: 0, misses: 0, cleanups: 0 }  ; 缓存统计
