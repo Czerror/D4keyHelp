@@ -313,8 +313,6 @@ ValidateRange(ctrl, min := 1, max := 9) {
     }
 }
 
-
-
 /**
  * 更新卡快照延迟
  */
@@ -402,16 +400,28 @@ ToggleMacro(*) {
  * 释放所有可能被按住的按键
  */
 ReleaseAllKeys() {
-    global holdStates
+    global holdStates, uCtrl
+    
+    ; 释放所有跟踪的按键
     for uniqueKey, _ in holdStates {
-        ; 解析 uniqueKey 得到实际按键
-        arr := StrSplit(uniqueKey, ":")
-        type := arr[1]
-        key := arr[2]
-        if (type = "mouse") {
-            Click "up " key
-        } else {
-            Send "{" key " up}"
+        try {
+            ; 解析 uniqueKey 得到实际按键
+            arr := StrSplit(uniqueKey, ":")
+            if (arr.Length < 2)
+                continue
+                
+            type := arr[1]
+            fullKey := arr[2]
+            
+            ; 移除前缀
+            if (type = "mouse") {
+                btn := SubStr(fullKey, 7)  ; 移除"mouse_"前缀
+                Click("up " btn)
+            } 
+            else if (type = "key") {
+                key := SubStr(fullKey, 5)   ; 移除"key_"前缀
+                Send("{" key " up}")
+            }
         }
     }
     ; 释放修饰键
@@ -769,51 +779,86 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
         case 2: ; BUFF模式
             if (pos && IsSkillActive(pos.x, pos.y))
                 return
+            
             if (isMouse) {
-                shiftEnabled ? SendWithShift(mouseBtn) : Click(mouseBtn)
+                if (shiftEnabled) {
+                    Send "{Blind} {Shift down}"
+                    Click(mouseBtn)
+                    Send "{Blind} {Shift up}"
+                } else {
+                    Click(mouseBtn)
+                }
             } else {
-                shiftEnabled ? SendWithShift(keyOrBtn) : Send("{" keyOrBtn "}")
+                if (shiftEnabled) {
+                    Send "{Blind} {Shift down}"
+                    Send "{" keyOrBtn "}"
+                    Send "{Blind} {Shift up}"
+                } else {
+                    Send "{" keyOrBtn "}"
+                }
             }
 
         case 3: ; 按住模式
             needPress := false
             isHeld := holdStates.Has(uniqueKey) && holdStates[uniqueKey]
-
+            
             if (!isHeld) {
+                ; 首次按下
                 needPress := true
                 holdStates[uniqueKey] := true
                 lastReholdTime[uniqueKey] := currentTime
+            } 
+            else if (!lastReholdTime.Has(uniqueKey) || 
+                    (currentTime - lastReholdTime[uniqueKey] > REHOLD_MIN_INTERVAL)) {
+                ; 需要重新按住
+                needPress := true
+                lastReholdTime[uniqueKey] := currentTime
             }
-            else {
-                    ; 安全时间差计算
-                    lastTime := lastReholdTime.Get(uniqueKey, 0)
-                    timeDiff := (currentTime - lastTime) & 0xFFFFFFFF
-                    if (timeDiff > REHOLD_MIN_INTERVAL) {
-                        needPress := true
-                        lastReholdTime[uniqueKey] := currentTime
-                    }
-                }
-
+            
+            ; 执行按键动作（只在需要时执行）
             if (needPress) {
-                if (shiftEnabled && !isHeld)
-                    Send "{Shift down}"
-
                 if (isMouse) {
-                    if (isHeld)
+                    if (isHeld) {
                         Click("up " mouseBtn)
+                    }
+                    ; 添加Shift支持
+                    if (shiftEnabled) {
+                        Send "{Blind}{Shift up}"
+                        Sleep 10
+                        Send "{Blind}{Shift down}"
+                    }
                     Click("down " mouseBtn)
                 } else {
-                    if (isHeld)
+                    if (isHeld) {
                         Send("{" keyOrBtn " up}")
+                    }
+                    ; 添加Shift支持
+                    if (shiftEnabled) {
+                        Send "{Blind}{Shift up}"
+                        Sleep 10
+                        Send "{Blind}{Shift down}"
+                    }
                     Send("{" keyOrBtn " down}")
                 }
             }
 
         default: ; 连点模式
             if (isMouse) {
-                shiftEnabled ? SendWithShift(mouseBtn) : Click(mouseBtn)
+                if (shiftEnabled) {
+                    Send "{Blind} {Shift down}"
+                    Click(mouseBtn)
+                    Send "{Blind} {Shift up}"
+                } else {
+                    Click(mouseBtn)
+                }
             } else {
-                shiftEnabled ? SendWithShift(keyOrBtn) : Send("{" keyOrBtn "}")
+                if (shiftEnabled) {
+                    Send "{Blind} {Shift down}"
+                    Send "{" keyOrBtn "}"
+                    Send "{Blind} {Shift up}"
+                } else {
+                    Send "{" keyOrBtn "}"
+                }
             }
     }
 }
@@ -1088,7 +1133,6 @@ PressMouseCallback(mouseBtn) {
 PressuSkillKey(uSkillId) {
     global uCtrl, skillTimers, RunMod, bSkill
     timerKey := "uSkill" uSkillId
-
     if (skillTimers.Has(timerKey)) {
         SetTimer(skillTimers[timerKey], 0)
         skillTimers.Delete(timerKey)
@@ -1105,18 +1149,6 @@ PressuSkillKey(uSkillId) {
     skillTimers[timerKey] := boundFunc
     SetTimer(boundFunc, interval)
 
-}
-
-/**
- * shift按键发送函数
- * @param {String} key - 要发送的按键
- */
-SendWithShift(key) {
-    Send "{Blind} {Shift down}"
-    Sleep 10
-    Send "{" key "}"
-    Sleep 10
-    Send "{Blind} {Shift up}"
 }
 
 /**
@@ -2363,4 +2395,5 @@ PerformSnapshot(*) {
 }
 
 ; 初始化GUI
+InitializeGUI()
 InitializeGUI()
