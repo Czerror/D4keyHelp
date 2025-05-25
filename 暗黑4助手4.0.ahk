@@ -2396,4 +2396,3 @@ PerformSnapshot(*) {
 
 ; 初始化GUI
 InitializeGUI()
-InitializeGUI()
