@@ -79,7 +79,7 @@ InitializeGUI() {
     global myGui, statusBar
 
     ; 创建主GUI窗口
-    myGui := Gui("", "暗黑4助手 v4.0")
+    myGui := Gui("", "暗黑4助手 v4.1")
     myGui.BackColor := "FFFFFF"
     myGui.SetFont("s10", "Microsoft YaHei UI")
     A_TrayMenu.Delete()
@@ -216,11 +216,16 @@ CreateAllControls() {
         "interval", myGui.AddEdit("x200 y520 w40 h20", "50")
     )
     uCtrl["dodge"] := Map(
-        "text", myGui.AddText("x30 y555 w30 h20", "空格:"),
-        "key", { Value: "Space" },
+        "text", myGui.AddText("x30 y555 w30 h20", "闪避:"),
+        "key", myGui.AddHotkey("x90 y553 w30 h20", "Space"),
         "enable", myGui.AddCheckbox("x130 y550 w45 h20", "启用"),
         "interval", myGui.AddEdit("x200 y550 w40 h20", "20")
     )
+
+    uCtrl["dodge"]["key"].OnEvent("Change", (*) => (
+        (uCtrl["dodge"]["key"].Value = "") && (uCtrl["dodge"]["key"].Value := "Space")
+    ))
+
     uCtrl["shift"] := Map(
         "text", myGui.AddText("x360 y430 w40 h20", "Shift:"),
         "enable", myGui.AddCheckbox("x400 y428 w20 h20")
@@ -245,7 +250,6 @@ CreateAllControls() {
         "text", myGui.AddText("x380 y180 w60 h20", "双击暂停:"),
         "enable", myGui.AddCheckbox("x440 y180 w20 h20")
     )
-    
     uCtrl["ipPause"] := Map(
         "text", myGui.AddText("x30 y155 w60 h20", "血条检测:"),
         "enable", myGui.AddCheckbox("x90 y155 w20 h20"),
@@ -253,7 +257,10 @@ CreateAllControls() {
         "pauseConfirm", myGui.AddEdit("x95 y183 w20 h20", "5"),
         "resumeConfirm", myGui.AddEdit("x135 y183 w20 h20", "2")
     )
-    
+    uCtrl["ranDom"] := Map(
+        "text", myGui.AddText("x360 y490 w60 h20", "随机延迟:"),
+        "enable", myGui.AddCheckbox("x420 y488 w20 h20")
+    )
     myGui.AddText("x80 y185 w15 h20", "停")
     myGui.AddText("x120 y185 w15 h20", "启")
     
@@ -502,26 +509,26 @@ StartAllTimers() {
     StopAllTimers()
     GetDynamicbSkill()
     if (RunMod.Value = 1) {
+        ; ===== 技能按键 =====
         loop 5 {
             skillIndex := A_Index
             if (cSkill[skillIndex]["enable"].Value) {
                 PressSkillCallback(skillIndex)
             }
         }
-        if (mSkill["left"]["enable"].Value) {
-            PressMouseCallback("left")
+        
+        ; ===== 鼠标按键 =====
+        for mouseBtn in ["left", "right"] {
+            if (mSkill[mouseBtn]["enable"].Value) {
+                PressMouseCallback(mouseBtn)
+            }
         }
-        if (mSkill["right"]["enable"].Value) {
-            PressMouseCallback("right")
-        }
-        if (uCtrl["dodge"]["enable"].Value) {
-            PressuSkillKey("dodge")
-        }
-        if (uCtrl["potion"]["enable"].Value) {
-            PressuSkillKey("potion")
-        }
-        if (uCtrl["forceMove"]["enable"].Value) {
-            PressuSkillKey("forceMove")
+        
+        ; ===== 功能键 - 整合后的处理 =====
+        for uSkillId in ["dodge", "potion", "forceMove"] {
+            if (uCtrl[uSkillId]["enable"].Value) {
+                PressuSkillKey(uSkillId)
+            }
         }
     } else if (RunMod.Value = 2) {
         keyQueue := []
@@ -1082,7 +1089,7 @@ KeyQueueWorker() {
  * @param {Integer} skillId - 技能索引 (1-5)
  */
 PressSkillCallback(skillId) {
-    global cSkill, skillTimers, RunMod, bSkill
+    global cSkill, skillTimers, RunMod, bSkill, uCtrl
     timerKey := "skill" skillId
     if (skillTimers.Has(timerKey)) {
         SetTimer(skillTimers[timerKey], 0)
@@ -1095,6 +1102,9 @@ PressSkillCallback(skillId) {
     mode := cSkill[skillId]["mode"].Value
     pos := bSkill.Has(skillId) ? bSkill[skillId] : ""
     interval := Integer(config["interval"].Value)
+    if (uCtrl["ranDom"]["enable"].Value == 1) {
+        interval += Random(1, 10)
+    }
     boundFunc := (RunMod.Value == 1)
         ? HandleKeyMode.Bind(key, mode, pos, "key", "")
         : EnqueueKey.Bind(key, mode, pos, "key", "", interval)
@@ -1107,7 +1117,7 @@ PressSkillCallback(skillId) {
  * @param {String} mouseBtn - 鼠标按钮名 (left/right)
  */
 PressMouseCallback(mouseBtn) {
-    global mSkill, skillTimers, RunMod, bSkill
+    global mSkill, skillTimers, RunMod, bSkill, uCtrl
     timerKey := "mouse" mouseBtn
     if (skillTimers.Has(timerKey)) {
         SetTimer(skillTimers[timerKey], 0)
@@ -1119,6 +1129,9 @@ PressMouseCallback(mouseBtn) {
     mode := config["mode"].Value
     pos := bSkill.Has(mouseBtn) ? bSkill[mouseBtn] : ""
     interval := Integer(config["interval"].Value)
+    if (uCtrl["ranDom"]["enable"].Value == 1) {
+        interval += Random(1, 10)
+    }
     boundFunc := (RunMod.Value == 1)
         ? HandleKeyMode.Bind(mouseBtn, mode, pos, "mouse", mouseBtn)
         : EnqueueKey.Bind(mouseBtn, mode, pos, "mouse", mouseBtn, interval)
@@ -1143,6 +1156,9 @@ PressuSkillKey(uSkillId) {
     key := config["key"].Value
     pos := bSkill.Has(uSkillId) ? bSkill[uSkillId] : ""
     interval := Integer(config["interval"].Value)
+    if (uCtrl["ranDom"]["enable"].Value == 1) {
+        interval += Random(1, 10)
+    }
     boundFunc := (RunMod.Value == 1)
         ? HandleKeyMode.Bind(key, 1, pos, "key", "")
         : EnqueueKey.Bind(key, 1, pos, "key", "", interval)
@@ -2051,6 +2067,7 @@ SaveuSkillSettings(file, profileName) {
     ; 确保保存所有其他功能设置
     IniWrite(uCtrl["dcPause"]["enable"].Value, file, section, "DcPauseEnable")
     IniWrite(uCtrl["shift"]["enable"].Value, file, section, "ShiftEnabled")
+    IniWrite(uCtrl["ranDom"]["enable"].Value, file, section, "RandomEnabled")
 
     ; 保存技能键设置
     IniWrite(uCtrl["huoDun"]["key"].Value, file, section, "HuoDunKey")
@@ -2238,7 +2255,8 @@ LoaduSkillSettings(file, profileName) {
         ; 加载其他设置
         uCtrl["dcPause"]["enable"].Value := IniRead(file, section, "DcPauseEnable", "1")
         uCtrl["shift"]["enable"].Value := IniRead(file, section, "ShiftEnabled", "0")
-
+        uCtrl["ranDom"]["enable"].Value := IniRead(file, section, "RandomEnabled", "0")
+        
         ; 加载法师技能设置
         uCtrl["huoDun"]["key"].Value := IniRead(file, section, "HuoDunKey", "2")
         uCtrl["dianMao"]["key"].Value := IniRead(file, section, "DianMaoKey", "1")
