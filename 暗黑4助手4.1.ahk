@@ -258,9 +258,17 @@ CreateAllControls() {
         "resumeConfirm", myGui.AddEdit("x135 y183 w20 h20", "2")
     )
     uCtrl["ranDom"] := Map(
-        "text", myGui.AddText("x360 y490 w60 h20", "随机延迟:"),
-        "enable", myGui.AddCheckbox("x420 y488 w20 h20")
+        "text", myGui.AddText("x270 y490 w60 h20", "随机延迟:"),
+        "enable", myGui.AddCheckbox("x330 y488 w20 h20"),
+        "min", myGui.AddEdit("x350 y488 w30 h20", "1"),
+        "max", myGui.AddEdit("x380 y488 w30 h20", "10")
     )
+
+    uCtrl["ranDom"]["min"].OnEvent("LoseFocus", (*) => (
+        uCtrl["ranDom"]["min"].Value := Max(1, uCtrl["ranDom"]["min"].Value)))
+    uCtrl["ranDom"]["max"].OnEvent("LoseFocus", (*) => (
+        uCtrl["ranDom"]["max"].Value := Max(uCtrl["ranDom"]["min"].Value, uCtrl["ranDom"]["max"].Value)))
+
     myGui.AddText("x80 y185 w15 h20", "停")
     myGui.AddText("x120 y185 w15 h20", "启")
     
@@ -1056,8 +1064,7 @@ KeyQueueWorker() {
         lastExec := keyQueueLastExec.Get(uniqueId, 0)
         
         ; 优化时间差计算
-        timeDiff := (now - lastExec) & 0xFFFFFFFF
-        if (timeDiff >= item.interval) {
+        if ((now - lastExec) >= item.interval) {
             HandleKeyMode(item.keyOrBtn, item.mode, item.pos, item.type, item.mouseBtn)
             keyQueueLastExec[uniqueId] := now
             pendingItems.Push(item)
@@ -1103,7 +1110,7 @@ PressSkillCallback(skillId) {
     pos := bSkill.Has(skillId) ? bSkill[skillId] : ""
     interval := Integer(config["interval"].Value)
     if (uCtrl["ranDom"]["enable"].Value == 1) {
-        interval += Random(1, 10)
+        interval += Random(uCtrl["ranDom"]["min"].Value, uCtrl["ranDom"]["max"].Value)
     }
     boundFunc := (RunMod.Value == 1)
         ? HandleKeyMode.Bind(key, mode, pos, "key", "")
@@ -1130,7 +1137,7 @@ PressMouseCallback(mouseBtn) {
     pos := bSkill.Has(mouseBtn) ? bSkill[mouseBtn] : ""
     interval := Integer(config["interval"].Value)
     if (uCtrl["ranDom"]["enable"].Value == 1) {
-        interval += Random(1, 10)
+        interval += Random(uCtrl["ranDom"]["min"].Value, uCtrl["ranDom"]["max"].Value)
     }
     boundFunc := (RunMod.Value == 1)
         ? HandleKeyMode.Bind(mouseBtn, mode, pos, "mouse", mouseBtn)
@@ -1157,7 +1164,7 @@ PressuSkillKey(uSkillId) {
     pos := bSkill.Has(uSkillId) ? bSkill[uSkillId] : ""
     interval := Integer(config["interval"].Value)
     if (uCtrl["ranDom"]["enable"].Value == 1) {
-        interval += Random(1, 10)
+        interval += Random(uCtrl["ranDom"]["min"].Value, uCtrl["ranDom"]["max"].Value)
     }
     boundFunc := (RunMod.Value == 1)
         ? HandleKeyMode.Bind(key, 1, pos, "key", "")
@@ -2068,6 +2075,8 @@ SaveuSkillSettings(file, profileName) {
     IniWrite(uCtrl["dcPause"]["enable"].Value, file, section, "DcPauseEnable")
     IniWrite(uCtrl["shift"]["enable"].Value, file, section, "ShiftEnabled")
     IniWrite(uCtrl["ranDom"]["enable"].Value, file, section, "RandomEnabled")
+    IniWrite(uCtrl["ranDom"]["min"].Value, file, section, "RandomMin")
+    IniWrite(uCtrl["ranDom"]["max"].Value, file, section, "RandomMax")
 
     ; 保存技能键设置
     IniWrite(uCtrl["huoDun"]["key"].Value, file, section, "HuoDunKey")
@@ -2256,6 +2265,8 @@ LoaduSkillSettings(file, profileName) {
         uCtrl["dcPause"]["enable"].Value := IniRead(file, section, "DcPauseEnable", "1")
         uCtrl["shift"]["enable"].Value := IniRead(file, section, "ShiftEnabled", "0")
         uCtrl["ranDom"]["enable"].Value := IniRead(file, section, "RandomEnabled", "0")
+        uCtrl["ranDom"]["min"].Value := IniRead(file, section, "RandomMin", "1")
+        uCtrl["ranDom"]["max"].Value := IniRead(file, section, "RandomMax", "10")
         
         ; 加载法师技能设置
         uCtrl["huoDun"]["key"].Value := IniRead(file, section, "HuoDunKey", "2")
