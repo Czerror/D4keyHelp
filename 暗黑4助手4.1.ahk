@@ -1,4 +1,4 @@
-#Requires AutoHotkey v2.0
+﻿#Requires AutoHotkey v2.0
 #SingleInstance Force
 ProcessSetPriority "High"
 
@@ -24,7 +24,6 @@ global statusText := ""            ; 状态文本控件
 global statusBar := ""             ; 状态栏控件
 global buffThreshold := ""         ; BUFF检测阈值滑块
 global buffThresholdValue := ""    ; 显示BUFF阈值的文本控件
-global sleepInput := ""            ; 卡快照延迟输入控件
 global currentProfileName := "默认" ; 当前配置名称
 global profileList := []           ; 配置列表
 
@@ -71,67 +70,71 @@ DebugLog(message) {
     }
 }
 
-; ==================== GUI界面管理 ====================
-/**
- * 初始化GUI
- */
+;|===============================================================|
+;| 函数: InitializeGUI
+;| 功能: 初始化主程序GUI界面
+;|===============================================================|
 InitializeGUI() {
     global myGui, statusBar
 
-    ; 创建主GUI窗口
+    ;# ==================== GUI基础设置 ==================== #
     myGui := Gui("", "暗黑4助手 v4.1")
-    myGui.BackColor := "FFFFFF"
-    myGui.SetFont("s10", "Microsoft YaHei UI")
-    A_TrayMenu.Delete()
+    myGui.BackColor := "FFFFFF"                    ; 背景色设为白色
+    myGui.SetFont("s10", "Microsoft YaHei UI")    ; 设置默认字体
+
+    ;# ==================== 系统托盘菜单 ==================== #
+    A_TrayMenu.Delete()  ; 清空默认菜单
     A_TrayMenu.Add("显示主界面", (*) => myGui.Show())
-    A_TrayMenu.Add()
+    A_TrayMenu.Add()  ; 分隔线
     A_TrayMenu.Add("开始/停止宏", ToggleMacro)
-    A_TrayMenu.Add()
+    A_TrayMenu.Add()  ; 分隔线
     A_TrayMenu.Add("退出", (*) => ExitApp())
-    A_TrayMenu.Default := "显示主界面"
-    ; 按下Escape键时最小化窗口而不是退出
-    myGui.OnEvent("Escape", (*) => myGui.Minimize())
-    ; 创建所有控件 - 主界面、配置管理、按键设置等
-    CreateMainGUI()
-    CreateAllControls()
+    A_TrayMenu.Default := "显示主界面"  ; 设置默认菜单项
 
-    ; 添加状态栏
-    statusBar := myGui.AddStatusBar(, "就绪")
+    ;|------------------- 窗口事件绑定 -------------------|
+    myGui.OnEvent("Escape", (*) => myGui.Minimize())  ; ESC键最小化
+    myGui.OnEvent("Close", (*) => ExitApp())          ; 关闭按钮退出
 
-    ; 显示GUI
+    ;# ==================== 界面构建 ==================== #
+    CreateMainGUI()     ; 创建主界面框架
+    CreateAllControls() ; 初始化所有功能控件
+
+    ;# ==================== 状态栏 ==================== #
+    statusBar := myGui.AddStatusBar(, "就绪")  ; 底部状态栏初始化
+
+    ;# ==================== 窗口显示 ==================== #
     myGui.Show("w480 h620")
 
-    ; 初始化配置方案列表
+    ;# ==================== 配置初始化 ==================== #
     InitializeProfiles()
-    myGui.OnEvent("Close", (*) => ExitApp())
-
 }
 
-/**
- * 创建主GUI界面
- */
+;|===============================================================|
+;| 函数: CreateMainGUI
+;| 功能: 创建主程序界面及所有控件
+;|===============================================================|
 CreateMainGUI() {
     global myGui, statusText, hotkeyControl, currentProfileName, RunMod, snapHotkeyControl
-    global profileDropDown, profileNameInput, buffThreshold, buffThresholdValue, sleepInput
+    global profileDropDown, profileNameInput, buffThreshold, buffThresholdValue
 
-    ; ----- 主区域 -----
+    ;# ==================== 主控制区域 ==================== #
     myGui.AddGroupBox("x10 y10 w280 h120", "运行模式: ")
-    statusText := myGui.AddText("x30 y35 w140 h20", "状态: 未运行")
+    statusText := myGui.AddText("x30 y35 w140 h20", "状态: 未运行")  ; 状态指示器
     myGui.AddButton("x30 y65 w80 h30", "开始/停止").OnEvent("Click", ToggleMacro)
     hotkeyControl := myGui.AddHotkey("x120 y70 w80 h20", currentHotkey)
     hotkeyControl.OnEvent("Change", (ctrl, *) => LoadGlobalHotkey())
     myGui.AddText("x30 y100 w240 h20", "提示：仅在暗黑破坏神4窗口活动时生效")
 
-    ; ----- 运行模式 -----
+    ;# ==================== 运行模式选择 ==================== #
     RunMod := myGui.AddDropDownList("x90 y8 w65 h60 Choose1", ["多线程", "单线程"])
     RunMod.OnEvent("Change", (*) => (
-        ; 如果宏正在运行，切换模式时重启定时器
-        (isRunning && (StopAllTimers(), StartAllTimers())
-        )
-        (RunMod.Value = 2 && FillKeyQueue()), ; 切换到单线程时刷新队列
+        ; 模式切换时重启定时器（如果正在运行）
+        (isRunning && (StopAllTimers(), StartAllTimers())),
+        (RunMod.Value = 2 && FillKeyQueue()),  ; 单线程模式需刷新队列
         UpdateStatus("", "宏已切换模式")
     ))
-    ; ----- 配置管理区 -----
+
+    ;# ==================== 配置管理区域 ==================== #
     myGui.AddGroupBox("x300 y10 w170 h120", "配置方案")
     profileDropDown := myGui.AddDropDownList("x320 y35 w60 h120 Choose1", ["默认"])
     profileDropDown.OnEvent("Change", LoadSelectedProfile)
@@ -139,125 +142,114 @@ CreateMainGUI() {
     myGui.AddButton("x320 y75 w40 h25", "保存").OnEvent("Click", SaveProfile)
     myGui.AddButton("x370 y75 w40 h25", "删除").OnEvent("Click", DeleteProfile)
 
-    ; ----- BUFF检测区 -----
+    ;# ==================== BUFF检测设置 ==================== #
     myGui.AddText("x30 y245", "BUFF检测阈值:")
-    buffThreshold := myGui.AddSlider("x120 y245 w100 Range50-200", 100)
+    buffThreshold := myGui.AddSlider("x120 y245 w100 Range50-200", 50)
     buffThresholdValue := myGui.AddText("x220 y245 w30 h20", buffThreshold.Value)
     buffThreshold.OnEvent("Change", (ctrl, *) => buffThresholdValue.Text := ctrl.Value)
 
-    ; ----- 按键设置区域 -----
+    ;# ==================== 按键设置主区域 ==================== #
     myGui.AddGroupBox("x10 y210 w460 h370", "按键设置")
 
-    ; ----- 快照设置区域 -----
+    ;|------------------- 快照热键设置 -------------------|
     myGui.AddGroupBox("x350 y210 w120 h210", "快照热键：")
     snapHotkeyControl := myGui.AddHotkey("x420 y208 w50 h20", snapHotkey)
     snapHotkeyControl.OnEvent("Change", (ctrl, *) => LoadSnapHotkey())
-    myGui.AddText("x360 y390 w60 h20", "快照延迟:")
-    sleepInput := myGui.AddEdit("x420 y388 w40 h20", "2700")
-    sleepInput.OnEvent("LoseFocus", ValidateSleepInput)
 
-    ; ----- 自动启停区域 -----
+    ;|----------------------- 自动启停 -----------------------|
     myGui.AddGroupBox("x10 y130 w460 h80", "启停管理")
     myGui.AddText("x30 y185 w50 h20", "灵敏度:")
     myGui.AddButton("x380 y145 w80 h25", "刷新检测").OnEvent("Click", RefreshDetection)
 }
 
-/**
- * 创建所有控件
- */
+;|===============================================================|
+;| 函数: CreateAllControls
+;| 功能: 创建主界面所有GUI控件并初始化配置
+;|===============================================================|
 CreateAllControls() {
     global myGui, cSkill, mSkill, uCtrl, skillMod
-    ; === 创建技能控件 ===
+    
     cSkill := Map()
     mSkill := Map()
-    uCtrl := Map()
+    uCtrl  := Map()
+
+    ;|----------------------- 技能配置 -----------------------|
     loop 5 {
         yPos := 280 + (A_Index - 1) * 30
+        
+        ; 技能标签
         myGui.AddText("x30 y" yPos " w40 h20", "技能" A_Index ":")
+        
+        ; 技能配置Map
         cSkill[A_Index] := Map(
-            "key", myGui.AddHotkey("x90 y" yPos " w30 h20", A_Index),
-            "enable", myGui.AddCheckbox("x130 y" yPos " w45 h20", "启用"),
+            "key",     myGui.AddHotkey("x90 y" yPos " w30 h20", A_Index),
+            "enable",  myGui.AddCheckbox("x130 y" yPos " w45 h20", "启用"),
             "interval", myGui.AddEdit("x200 y" yPos " w40 h20", "20"),
-            "mode", myGui.AddDropDownList("x270 y" yPos " w60 h120 Choose1", skillMod)
+            "mode",    myGui.AddDropDownList("x270 y" yPos " w60 h120 Choose1", skillMod)
         )
-        ; 添加ms文本标签
+        
+        ; 间隔时间单位标签
         myGui.AddText("x240 y" yPos + 5 " w20 h15", "ms")
     }
 
-    ; === 创建鼠标控件 ===
+    ;|----------------------- 左键配置 -----------------------|
     mSkill["left"] := Map(
-        "enable", myGui.AddCheckbox("x130 y430 w45 h20", "启用"),
+        "text",    myGui.AddText("x30 y430 w40 h20", "左键:"),
+        "key",     "LButton",  ; 固定键值
+        "enable",  myGui.AddCheckbox("x130 y430 w45 h20", "启用"),
         "interval", myGui.AddEdit("x200 y430 w40 h20", "80"),
-        "mode", myGui.AddDropDownList("x270 y430 w60 h120 Choose1", skillMod)
+        "mode",    myGui.AddDropDownList("x270 y430 w60 h120 Choose1", skillMod)
     )
+
+    ;|----------------------- 右键配置 -----------------------|
     mSkill["right"] := Map(
-        "enable", myGui.AddCheckbox("x130 y460 w45 h20", "启用"),
+        "text",    myGui.AddText("x30 y460 w40 h20", "右键:"),
+        "key",     "RButton",  ; 固定键值
+        "enable",  myGui.AddCheckbox("x130 y460 w45 h20", "启用"),
         "interval", myGui.AddEdit("x200 y460 w40 h20", "300"),
-        "mode", myGui.AddDropDownList("x270 y460 w60 h120 Choose1", skillMod)
+        "mode",    myGui.AddDropDownList("x270 y460 w60 h120 Choose1", skillMod)
     )
-    myGui.AddText("x30 y430 w40 h20", "左键:")
-    myGui.AddText("x30 y460 w40 h20", "右键:")
-    ; 添加ms标签
+
+    ; 为鼠标控件添加ms单位标签
     loop 5 {
         yPos := 435 + (A_Index - 1) * 30
         myGui.AddText("x240 y" yPos " w20 h15", "ms")
     }
-    ; === 创建控件 ===
+
+    ;|---------------------- 基础功能 ------------------------|
     uCtrl["potion"] := Map(
-        "text", myGui.AddText("x30 y490 w30 h20", "喝药:"),
-        "key", myGui.AddHotkey("x90 y488 w30 h20", "q"),
-        "enable", myGui.AddCheckbox("x130 y490 w45 h20", "启用"),
+        "text",    myGui.AddText("x30 y490 w30 h20", "喝药:"),
+        "key",    myGui.AddHotkey("x90 y488 w30 h20", "q"),
+        "enable",  myGui.AddCheckbox("x130 y490 w45 h20", "启用"),
         "interval", myGui.AddEdit("x200 y490 w40 h20", "3000")
     )
+
     uCtrl["forceMove"] := Map(
-        "text", myGui.AddText("x30 y520 w30 h20", "强移:"),
-        "key", myGui.AddHotkey("x90 y518 w30 h20", "f"),
-        "enable", myGui.AddCheckbox("x130 y520 w45 h20", "启用"),
+        "text",    myGui.AddText("x30 y520 w30 h20", "强移:"),
+        "key",    myGui.AddHotkey("x90 y518 w30 h20", "f"),
+        "enable",  myGui.AddCheckbox("x130 y520 w45 h20", "启用"),
         "interval", myGui.AddEdit("x200 y520 w40 h20", "50")
     )
+
+    ;|---------------------- 闪避功能 ------------------------|
     uCtrl["dodge"] := Map(
-        "text", myGui.AddText("x30 y555 w30 h20", "闪避:"),
-        "key", myGui.AddHotkey("x90 y553 w30 h20", "Space"),
-        "enable", myGui.AddCheckbox("x130 y550 w45 h20", "启用"),
+        "text",    myGui.AddText("x30 y555 w30 h20", "闪避:"),
+        "key",    myGui.AddHotkey("x90 y553 w30 h20", "Space"),
+        "enable",  myGui.AddCheckbox("x130 y550 w45 h20", "启用"),
         "interval", myGui.AddEdit("x200 y550 w40 h20", "20")
     )
-
+    ; 闪避键空值保护
     uCtrl["dodge"]["key"].OnEvent("Change", (*) => (
         (uCtrl["dodge"]["key"].Value = "") && (uCtrl["dodge"]["key"].Value := "Space")
     ))
 
-    uCtrl["shift"] := Map(
-        "text", myGui.AddText("x360 y430 w40 h20", "Shift:"),
+    ;|---------------------- 辅助功能 ------------------------|
+    uCtrl["shift"] := Map(   ; Shift键辅助
+        "text",   myGui.AddText("x360 y430 w40 h20", "Shift:"),
         "enable", myGui.AddCheckbox("x400 y428 w20 h20")
     )
-    uCtrl["huoDun"] := Map(
-        "text", myGui.AddText("x360 y240 w30 h20", "火盾:"),
-        "key", myGui.AddHotkey("x390 y238 w20 h20", "2")
-    )
-    uCtrl["dianMao"] := Map(
-        "text", myGui.AddText("x360 y280 w30 h20", "电矛:"),
-        "key", myGui.AddHotkey("x390 y278 w20 h20", "1")
-    )
-    uCtrl["dianQiu"] := Map(
-        "text", myGui.AddText("x360 y320 w30 h20", "电球:"),
-        "key", myGui.AddHotkey("x390 y318 w20 h20", "e")
-    )
-    uCtrl["binDun"] := Map(
-        "text", myGui.AddText("x360 y360 w30 h20", "冰盾:"),
-        "key", myGui.AddHotkey("x390 y358 w20 h20", "3")
-    )
-    uCtrl["dcPause"] := Map(
-        "text", myGui.AddText("x380 y180 w60 h20", "双击暂停:"),
-        "enable", myGui.AddCheckbox("x440 y180 w20 h20")
-    )
-    uCtrl["ipPause"] := Map(
-        "text", myGui.AddText("x30 y155 w60 h20", "血条检测:"),
-        "enable", myGui.AddCheckbox("x90 y155 w20 h20"),
-        "interval", myGui.AddEdit("x115 y155 w40 h20", "50"),
-        "pauseConfirm", myGui.AddEdit("x95 y183 w20 h20", "5"),
-        "resumeConfirm", myGui.AddEdit("x135 y183 w20 h20", "2")
-    )
-    uCtrl["ranDom"] := Map(
+
+    uCtrl["ranDom"] := Map(  ; 随机延迟
         "text", myGui.AddText("x270 y490 w60 h20", "随机延迟:"),
         "enable", myGui.AddCheckbox("x330 y488 w20 h20"),
         "min", myGui.AddEdit("x350 y488 w30 h20", "1"),
@@ -269,81 +261,94 @@ CreateAllControls() {
     uCtrl["ranDom"]["max"].OnEvent("LoseFocus", (*) => (
         uCtrl["ranDom"]["max"].Value := Max(uCtrl["ranDom"]["min"].Value, uCtrl["ranDom"]["max"].Value)))
 
-    myGui.AddText("x80 y185 w15 h20", "停")
-    myGui.AddText("x120 y185 w15 h20", "启")
-    
-    bloodInterval := uCtrl["ipPause"]["interval"]
-    bloodInterval.OnEvent("LoseFocus", (ctrl, *) => ValidateTimerInterval(ctrl, "blood"))
-    
+    ;|---------------------- 技能热键 ------------------------|
+    uCtrl["huoDun"] := Map(  ; 火盾
+        "text", myGui.AddText("x360 y240 w30 h20", "火盾:"),
+        "key", myGui.AddHotkey("x390 y238 w20 h20", "2")
+    )
+
+    uCtrl["dianMao"] := Map(  ; 电矛
+        "text", myGui.AddText("x360 y280 w30 h20", "电矛:"),
+        "key", myGui.AddHotkey("x390 y278 w20 h20", "1")
+    )
+
+    uCtrl["dianQiu"] := Map(  ; 电球
+        "text", myGui.AddText("x360 y320 w30 h20", "电球:"),
+        "key", myGui.AddHotkey("x390 y318 w20 h20", "e")
+    )
+
+    uCtrl["binDun"] := Map(  ; 冰盾
+        "text", myGui.AddText("x360 y360 w30 h20", "冰盾:"),
+        "key", myGui.AddHotkey("x390 y358 w20 h20", "3")
+    )
+
+    ;|---------------------- 延迟设置 ------------------------|
+    uCtrl["sleepD"] := Map(
+        "text", myGui.AddText("x360 y390 w60 h20", "网络延迟:"),
+        "sleepInput", myGui.AddEdit("x420 y388 w40 h20", "60")
+    )
+    ; 延迟输入限制(5-500ms)
+    uCtrl["sleepD"]["sleepInput"].OnEvent("LoseFocus", (*) => (
+        LimitEditValue(uCtrl["sleepD"]["sleepInput"], 5, 500)))
+
+    ;|---------------------- 血条检测 ------------------------|
+    uCtrl["ipPause"] := Map(
+        "text",    myGui.AddText("x30 y155 w60 h20", "血条检测:"),
+        "stopText", myGui.AddText("x80 y185 w15 h20", "停"),
+        "startText", myGui.AddText("x120 y185 w15 h20", "启"),
+        "enable",  myGui.AddCheckbox("x90 y155 w20 h20"),
+        "interval", myGui.AddEdit("x115 y155 w40 h20", "50"),
+        "pauseConfirm", myGui.AddEdit("x95 y183 w20 h20", "5"),
+        "resumeConfirm", myGui.AddEdit("x135 y183 w20 h20", "2")
+    )
+    ; 输入验证
+    uCtrl["ipPause"]["interval"].OnEvent("LoseFocus", (*) => (
+        LimitEditValue(uCtrl["ipPause"]["interval"], 10, 1000)))
+    uCtrl["ipPause"]["pauseConfirm"].OnEvent("LoseFocus", (*) => (
+        LimitEditValue(uCtrl["ipPause"]["pauseConfirm"], 1, 9)))
+    uCtrl["ipPause"]["resumeConfirm"].OnEvent("LoseFocus", (*) => (
+        LimitEditValue(uCtrl["ipPause"]["resumeConfirm"], 1, 9)))
+
+    ;|---------------------- 界面检测 ------------------------|
     uCtrl["tabPause"] := Map(
-        "text", myGui.AddText("x200 y155 w60 h20", "界面检测:"),
-        "enable", myGui.AddCheckbox("x260 y155 w20 h20"),
+        "text",    myGui.AddText("x200 y155 w60 h20", "界面检测:"),
+        "stopText", myGui.AddText("x250 y185 w15 h20", "停"),
+        "startText", myGui.AddText("x290 y185 w15 h20", "启"),
+        "enable",  myGui.AddCheckbox("x260 y155 w20 h20"),
         "interval", myGui.AddEdit("x285 y155 w40 h20", "50"),
         "pauseConfirm", myGui.AddEdit("x265 y180 w20 h20", "2"),
         "resumeConfirm", myGui.AddEdit("x305 y180 w20 h20", "2")
     )
-    
-    myGui.AddText("x250 y185 w15 h20", "停")
-    myGui.AddText("x290 y185 w15 h20", "启")
-    
-    tabInterval := uCtrl["tabPause"]["interval"]
-    tabInterval.OnEvent("LoseFocus", (ctrl, *) => ValidateTimerInterval(ctrl, "tab"))
-    
-    ; 添加鼠标自动移动控件
-    uCtrl["mouseAutoMove"] := Map(
-        "text", myGui.AddText("x360 y460 w30 h20", "自移:"),
-        "enable", myGui.AddCheckbox("x400 y460 w15 h15"),
-        "interval", myGui.AddEdit("x420 y458 w40 h20", "1000"),
-        "currentPoint", 1
+    ; 输入验证
+    uCtrl["tabPause"]["interval"].OnEvent("LoseFocus", (*) => (
+        LimitEditValue(uCtrl["tabPause"]["interval"], 10, 1000)))
+    uCtrl["tabPause"]["pauseConfirm"].OnEvent("LoseFocus", (*) => (
+        LimitEditValue(uCtrl["tabPause"]["pauseConfirm"], 1, 9)))
+    uCtrl["tabPause"]["resumeConfirm"].OnEvent("LoseFocus", (*) => (
+        LimitEditValue(uCtrl["tabPause"]["resumeConfirm"], 1, 9)))
+
+    uCtrl["dcPause"] := Map(
+        "text", myGui.AddText("x380 y180 w60 h20", "双击暂停:"),
+        "enable", myGui.AddCheckbox("x440 y180 w20 h20")
     )
     
-    for ctrl in [uCtrl["ipPause"]["pauseConfirm"], uCtrl["ipPause"]["resumeConfirm"],
-        uCtrl["tabPause"]["pauseConfirm"], uCtrl["tabPause"]["resumeConfirm"]] {
-        ctrl.OnEvent("LoseFocus", (c, *) => ValidateRange(c))
-        ; 可以考虑添加Change事件实时验证
-        ; ctrl.OnEvent("Change", (c,*) => ValidateRange(c))
-    }
-}
-
-ValidateRange(ctrl, min := 1, max := 9) {
-    global statusBar
-
-    try {
-        val := Integer(ctrl.Value)
-        if (val < min) {
-            ctrl.Value := min
-            statusBar.Text := "确认次数不能小于" min "，已调整为" min
-        }
-        else if (val > max) {
-            ctrl.Value := max
-            statusBar.Text := "确认次数不能大于" max "，已调整为" max
-        }
-        else {
-            ; 输入有效时提示用户设置已更新
-            statusBar.Text := "确认次数已更新为: " val
-        }
-    } catch {
-        ctrl.Value := min
-        statusBar.Text := "请输入有效数字，已设为默认值" min
-    }
+    ;|----------------------- 鼠标自动移动 -----------------------|
+    uCtrl["mouseAutoMove"] := Map(
+        "text",    myGui.AddText("x360 y460 w30 h20", "自移:"),
+        "enable",  myGui.AddCheckbox("x400 y460 w15 h15"),
+        "interval", myGui.AddEdit("x420 y458 w40 h20", "1000"),
+        "currentPoint", 1  ; 移动点位标记
+    )
 }
 
 /**
- * 更新卡快照延迟
+ * 数值限制函数
+ * @param {Object} ctrl - 控件对象
+ * @param {Number} min - 最小值
+ * @param {Number} max - 最大值
  */
-ValidateSleepInput(ctrl, *) {
-    try {
-        val := Integer(ctrl.Value)
-        if (val < 2400 || val > 5000) {
-            ctrl.Value := 2700
-            statusBar.Text := "延迟必须在2400-5000毫秒范围内"
-        } else {
-            statusBar.Text := "卡快照延迟已更新: " val "毫秒"
-        }
-    } catch {
-        ctrl.Value := 2700
-        statusBar.Text := "请输入有效数字"
-    }
+LimitEditValue(ctrl, min, max) {
+    ctrl.Value := Max(min, Min(max, Integer(ctrl.Value)))
 }
 
 /**
@@ -371,7 +376,7 @@ ToggleMacro(*) {
 
     ; 确保完全停止所有定时器
     StopAllTimers()
-    ManageTimers("none", false) ; 停止所有检测定时器
+    ManageTimers("none", false)
 
     ; 切换运行状态
     isRunning := !isRunning
@@ -385,19 +390,17 @@ ToggleMacro(*) {
         ; 启动监控定时器
         ManageTimers("all", true)
 
-        ; 只有在暗黑4窗口激活时才启动定时器
         if WinActive("ahk_class Diablo IV Main Window Class") {
             StartAllTimers()
             UpdateStatus("运行中", "宏已启动")
         } else {
-            ; 如果窗口未激活，设置窗口暂停状态
             isPaused["window"] := true
             UpdateStatus("已暂停(窗口切换)", "宏已暂停 - 窗口未激活")
         }
     } else {
         ; 停止所有定时器
         StopAllTimers()
-        ManageTimers("none", false) ; 停止所有检测定时器
+        ManageTimers("none", false)
 
         ; 重置所有暂停状态
         for key, _ in isPaused {
@@ -546,6 +549,7 @@ StartAllTimers() {
     }
     StartAutoMove()
 }
+
 /**
  * 停止所有定时器
  */
@@ -577,9 +581,9 @@ StopAllTimers() {
 }
 /**
  * 管理全局定时器
- * @param {String} timerType - 定时器类型，"window"(窗口检测)、"blood"(血条检测)、"tab"(界面检测)、"all"(所有)或"none"(无)
+ * @param {String} timerType - 定时器类型
  * @param {Boolean} enable - 是否启用定时器
- * @param {Integer} interval - 定时器间隔(毫秒)，可选，默认值取决于定时器类型
+ * @param {Integer} interval - 定时器间隔(毫秒)
  * @returns {Boolean} - 操作是否成功
  */
 ManageTimers(timerType, enable, interval := unset) {
@@ -635,47 +639,6 @@ ManageTimers(timerType, enable, interval := unset) {
 }
 
 /**
- * 验证定时器间隔输入并提供反馈
- * @param {Object} ctrl - 控件对象
- * @param {String} timerType - 定时器类型
- */
-ValidateTimerInterval(ctrl, timerType) {
-    global statusBar, isRunning
-
-    ; 默认值设置
-    defaultValue := timerType == "blood" ? 50 : 100
-    typeText := timerType == "blood" ? "血条检测" : "界面检测"
-
-    try {
-        val := Integer(ctrl.Value)
-
-        ; 范围检查 (10-1000ms)
-        if (val < 10 || val > 1000) {
-            ctrl.Value := defaultValue
-            statusBar.Text := "定时器间隔必须在10-1000毫秒范围内，已重置为" defaultValue "ms"
-            return defaultValue
-        }
-
-        ; 构建状态消息
-        statusMsg := typeText "间隔已更新: " val "ms"
-
-        ; 添加提示
-        if (isRunning)
-            statusMsg .= " (点击'刷新检测'按钮使更改生效)"
-
-        if (val < 30)
-            statusMsg .= " - 注意：过低的间隔可能会影响性能"
-
-        statusBar.Text := statusMsg
-    } catch {
-        ctrl.Value := defaultValue
-        statusBar.Text := "请输入有效数字，已重置为" defaultValue "ms"
-    }
-
-    return Integer(ctrl.Value)
-}
-
-/**
  * 立即刷新所有检测
  * 清理缓存，立即执行检测，支持强制恢复运行
  * @param {*} - 事件参数（来自按钮点击事件）
@@ -692,8 +655,8 @@ RefreshDetection(*) {
     ManageTimers("none", false)
 
     ; 验证并获取间隔设置
-    bloodInterval := ValidateTimerInterval(uCtrl["ipPause"]["interval"], "blood")
-    tabInterval := ValidateTimerInterval(uCtrl["tabPause"]["interval"], "tab")
+    bloodInterval := Integer(uCtrl["ipPause"]["interval"].Value)
+    tabInterval := Integer(uCtrl["tabPause"]["interval"].Value)
 
     ; 清理像素缓存 - 强制触发GetPixelRGB的缓存清理
     CleanPixelCache()
@@ -727,9 +690,9 @@ RefreshDetection(*) {
     paused := IsAnyPaused()
     statusBar.Text := "已刷新所有检测定时器" (paused ? " (宏仍在暂停状态)" : "")
 }
+
 /**
  * 强制清理像素缓存的辅助函数
- * 通过直接重置缓存变量来实现
  */
 CleanPixelCache() {
     static lastCacheClear := 0
@@ -767,13 +730,14 @@ StartAutoMove() {
  * @param {String} keyOrBtn - 键名或鼠标按钮名
  * @param {Integer} mode - 模式编号 (1: 连点, 2: BUFF, 3: 按住)
  * @param {Object} pos - BUFF检测坐标对象（可选）
- * @param {String} type - "key"、"mouse" 或 "uSkill"
- * @param {String} mouseBtn - 鼠标按钮名（如"left"/"right"，仅type为mouse时用）
+ * @param {String} type - - 输入类型 ("key"|"mouse"|"uSkill")
+ * @param {String} mouseBtn - 鼠标按钮名（"left"/"right"）
  */
 HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
     global uCtrl, buffThreshold, holdStates
     static lastReholdTime := Map()
     static REHOLD_MIN_INTERVAL := 2000
+    static shiftEnabled := uCtrl["shift"]["enable"].Value
 
     ; 缓存 A_TickCount
     currentTime := A_TickCount
@@ -787,7 +751,6 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
 
     ; 预先确定是否为鼠标操作
     isMouse := (type = "mouse")
-    shiftEnabled := uCtrl["shift"]["enable"].Value
 
     ; 模式处理
     switch mode {
@@ -1171,7 +1134,6 @@ PressuSkillKey(uSkillId) {
         : EnqueueKey.Bind(key, 1, pos, "key", "", interval)
     skillTimers[timerKey] := boundFunc
     SetTimer(boundFunc, interval)
-
 }
 
 /**
@@ -2078,15 +2040,15 @@ SaveuSkillSettings(file, profileName) {
     IniWrite(uCtrl["ranDom"]["min"].Value, file, section, "RandomMin")
     IniWrite(uCtrl["ranDom"]["max"].Value, file, section, "RandomMax")
 
-    ; 保存技能键设置
+    ; 保存快照设置
     IniWrite(uCtrl["huoDun"]["key"].Value, file, section, "HuoDunKey")
     IniWrite(uCtrl["dianMao"]["key"].Value, file, section, "DianMaoKey")
     IniWrite(uCtrl["dianQiu"]["key"].Value, file, section, "DianQiuKey")
     IniWrite(uCtrl["binDun"]["key"].Value, file, section, "BinDunKey")
+    IniWrite(uCtrl["sleepD"]["sleepInput"].Value, file, section, "SnapSleepDelay")
 
     ; 保存其他全局设置
     IniWrite(buffThreshold.Value, file, section, "BuffThreshold")
-    IniWrite(sleepInput.Value, file, section, "SnapSleepDelay")
     IniWrite(hotkeyControl.Value, file, section, "StartStopKey")
     IniWrite(snapHotkeyControl.Value, file, section, "SnapHotkey")
     IniWrite(RunMod.Value, file, section, "RunMod")
@@ -2226,7 +2188,7 @@ LoadMouseSettings(file, profileName) {
  * @param {String} profileName - 配置方案名称
  */
 LoaduSkillSettings(file, profileName) {
-    global uCtrl, hotkeyControl, sleepInput
+    global uCtrl, hotkeyControl
     section := profileName "_uSkill"
 
     try {
@@ -2273,13 +2235,12 @@ LoaduSkillSettings(file, profileName) {
         uCtrl["dianMao"]["key"].Value := IniRead(file, section, "DianMaoKey", "1")
         uCtrl["dianQiu"]["key"].Value := IniRead(file, section, "DianQiuKey", "e")
         uCtrl["binDun"]["key"].Value := IniRead(file, section, "BinDunKey", "3")
+        uCtrl["sleepD"]["sleepInput"].Value := IniRead(file, section, "SnapSleepDelay", "60")
 
         ; 加载BUFF阈值和卡快照延迟
         thresholdValue := IniRead(file, section, "BuffThreshold", "100")
         buffThreshold.Value := thresholdValue
         buffThresholdValue.Text := thresholdValue
-
-        sleepInput.Value := IniRead(file, section, "SnapSleepDelay", "2700")
 
         ; 加载全局热键
         hotkeyControl.Value := IniRead(file, section, "StartStopKey", "F1")
@@ -2299,30 +2260,23 @@ LoaduSkillSettings(file, profileName) {
 LoadGlobalHotkey() {
     global currentHotkey, hotkeyControl, statusBar
 
-    ; 处理空热键值
     if (hotkeyControl.Value = "") {
-        ; 将热键恢复为之前的值或默认值
         hotkeyControl.Value := currentHotkey ? currentHotkey : "F1"
         statusBar.Text := "热键不能为空，已恢复为: " hotkeyControl.Value
         return
     }
 
     try {
-        ; 移除旧热键绑定
         if (currentHotkey != "") {
             Hotkey(currentHotkey, ToggleMacro, "Off")
         }
 
-        ; 获取并验证新热键
         newHotkey := hotkeyControl.Value
 
-        ; 注册新热键
         Hotkey(newHotkey, ToggleMacro, "On")
         currentHotkey := newHotkey
-        ; 更新状态栏
         statusBar.Text := "热键已更新: " newHotkey
     } catch as err {
-        ; 处理热键注册失败的情况
         hotkeyControl.Value := currentHotkey ? currentHotkey : "F1"
         statusBar.Text := "热键设置失败: " err.Message
     }
@@ -2334,30 +2288,23 @@ LoadGlobalHotkey() {
 LoadSnapHotkey() {
     global snapHotkey, snapHotkeyControl, statusBar
 
-    ; 处理空热键值
     if (snapHotkeyControl.Value = "") {
-        ; 将热键恢复为之前的值或默认值
         snapHotkeyControl.Value := snapHotkey ? snapHotkey : "F3"
         statusBar.Text := "快照热键不能为空，已恢复为: " snapHotkeyControl.Value
         return
     }
 
     try {
-        ; 移除旧热键绑定
         if (snapHotkey != "") {
             Hotkey(snapHotkey, PerformSnapshot, "Off")
         }
 
-        ; 获取并验证新热键
         newHotkey := snapHotkeyControl.Value
 
-        ; 注册新热键
         Hotkey(newHotkey, PerformSnapshot, "On")
         snapHotkey := newHotkey
-        ; 更新状态栏
         statusBar.Text := "快照热键已更新: " newHotkey
     } catch as err {
-        ; 处理热键注册失败的情况
         snapHotkeyControl.Value := snapHotkey ? snapHotkey : "F3"
         statusBar.Text := "快照热键设置失败: " err.Message
     }
@@ -2367,37 +2314,38 @@ LoadSnapHotkey() {
  * 执行卡快照功能
  */
 PerformSnapshot(*) {
-    global uCtrl, sleepInput
+    global uCtrl
     
-    ; 确保从配置对象获取最新值
-    dianQiuKey := uCtrl["dianQiu"]["key"].Value
-    huoDunKey := uCtrl["huoDun"]["key"].Value
-    dianMaoKey := uCtrl["dianMao"]["key"].Value
-    binDunKey := uCtrl["binDun"]["key"].Value
+    netsleep := uCtrl["sleepD"]["sleepInput"].Value
+    ; 第一阶段：基础连招
+    Send "{Blind}{" uCtrl["binDun"]["key"].Value "}"
+    Sleep netsleep
     
-    ; 获取延迟值
-    sleepD := Integer(sleepInput.Value)
-    ; 验证范围
-    if (sleepD < 2400 || sleepD > 5000)
-        sleepD := 2700
-
-    ; 添加错误处理
-    try {
-        ; 执行连招
-        Send "{Blind}{" binDunKey "}"  ; 使用Blind模式保持Shift状态
-        Sleep 75
-        loop 4 {
-            Send "{Blind}{" dianQiuKey "}"
-            Sleep 850
-        }
-        Send "{Blind}{" huoDunKey "}"
-        Sleep sleepD
-        Send "{Blind}{" dianMaoKey "}"
-        Sleep 550
-        ToggleMacro()
-    } catch as err {
-        TrayTip "连招错误", "请检查技能键配置", 3
+    Loop 4 {
+        Send "{Blind}{" uCtrl["dianQiu"]["key"].Value "}"
+        Sleep 350
+        Send "{Blind}{" uCtrl["dodge"]["key"].Value "}"
+        Sleep 500
     }
+
+    Send "{Blind}{" uCtrl["huoDun"]["key"].Value "}"
+    startTime := A_TickCount
+    
+    ; 紧凑化循环
+    while (A_TickCount - startTime < 2100 - netsleep) {
+        Send "{Blind}{" uCtrl["dianQiu"]["key"].Value "}"
+        Sleep netsleep
+    }
+    
+    ; 第二阶段：电矛卡快照
+    elapsedTime := A_TickCount - startTime
+    if (elapsedTime < 2400 + netsleep * 2) {
+        Sleep 2400 + netsleep * 2 - elapsedTime
+    }
+
+    Send "{Blind}{" uCtrl["dianMao"]["key"].Value "}"
+    Sleep 850
+    ToggleMacro()
 }
 
 ; ==================== 热键处理 ====================
