@@ -348,7 +348,9 @@ CreateAllControls() {
  * @param {Number} max - 最大值
  */
 LimitEditValue(ctrl, min, max) {
-    ctrl.Value := Max(min, Min(max, Integer(ctrl.Value)))
+    value := ctrl.Value + 0
+    ctrl.Value := value < min ? min : (value > max ? max : value)
+    return
 }
 
 /**
