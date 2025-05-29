@@ -293,10 +293,10 @@ CreateAllControls() {
 
     ;|---------------------- 血条检测 ------------------------|
     uCtrl["ipPause"] := Map(
-        "text",    myGui.AddText("x30 y155 w60 h20", "血条检测:"),
+        "text", myGui.AddText("x30 y155 w60 h20", "血条检测:"),
         "stopText", myGui.AddText("x80 y185 w15 h20", "停"),
         "startText", myGui.AddText("x120 y185 w15 h20", "启"),
-        "enable",  myGui.AddCheckbox("x90 y155 w20 h20"),
+        "enable", myGui.AddCheckbox("x90 y155 w20 h20"),
         "interval", myGui.AddEdit("x115 y155 w40 h20", "50"),
         "pauseConfirm", myGui.AddEdit("x95 y183 w20 h20", "5"),
         "resumeConfirm", myGui.AddEdit("x135 y183 w20 h20", "2")
@@ -311,10 +311,10 @@ CreateAllControls() {
 
     ;|---------------------- 界面检测 ------------------------|
     uCtrl["tabPause"] := Map(
-        "text",    myGui.AddText("x200 y155 w60 h20", "界面检测:"),
+        "text", myGui.AddText("x200 y155 w60 h20", "界面检测:"),
         "stopText", myGui.AddText("x250 y185 w15 h20", "停"),
         "startText", myGui.AddText("x290 y185 w15 h20", "启"),
-        "enable",  myGui.AddCheckbox("x260 y155 w20 h20"),
+        "enable", myGui.AddCheckbox("x260 y155 w20 h20"),
         "interval", myGui.AddEdit("x285 y155 w40 h20", "50"),
         "pauseConfirm", myGui.AddEdit("x265 y180 w20 h20", "2"),
         "resumeConfirm", myGui.AddEdit("x305 y180 w20 h20", "2")
@@ -331,11 +331,19 @@ CreateAllControls() {
         "text", myGui.AddText("x380 y180 w60 h20", "双击暂停:"),
         "enable", myGui.AddCheckbox("x440 y180 w20 h20")
     )
-    
+    ;|----------------------- 自动彼列 -----------------------|
+;    uCtrl["autobilie"] := Map(
+;        "text", myGui.AddText("x270 y520 w60 h20", "自动彼列:"),
+;        "enable", myGui.AddCheckbox("x330 y518 w20 h20"),
+;        "count", myGui.AddEdit("x350 y518 w30 h20", "10"),
+;        "text", myGui.AddText("x270 y540 w60 h20", "强制交互:"),
+;        "Interaction", myGui.AddHotkey("x350 y538 w20 h20", "d")
+;    )
+
     ;|----------------------- 鼠标自动移动 -----------------------|
     uCtrl["mouseAutoMove"] := Map(
-        "text",    myGui.AddText("x360 y460 w30 h20", "自移:"),
-        "enable",  myGui.AddCheckbox("x400 y460 w15 h15"),
+        "text", myGui.AddText("x360 y460 w30 h20", "自移:"),
+        "enable", myGui.AddCheckbox("x400 y460 w15 h15"),
         "interval", myGui.AddEdit("x420 y458 w40 h20", "1000"),
         "currentPoint", 1  ; 移动点位标记
     )
@@ -2316,16 +2324,20 @@ LoadSnapHotkey() {
  * 执行卡快照功能
  */
 PerformSnapshot(*) {
-    global uCtrl
+    global uCtrl, mSkill
     
     netsleep := uCtrl["sleepD"]["sleepInput"].Value
     ; 第一阶段：基础连招
+    Send "{Blind}{" mSkill["right"]["key"] "}"
+    Sleep netsleep
     Send "{Blind}{" uCtrl["binDun"]["key"].Value "}"
     Sleep netsleep
     
     Loop 4 {
         Send "{Blind}{" uCtrl["dianQiu"]["key"].Value "}"
         Sleep 350
+        Send "{Blind}{" mSkill["right"]["key"] "}"
+        Sleep netsleep
         Send "{Blind}{" uCtrl["dodge"]["key"].Value "}"
         Sleep 500
     }
@@ -2350,6 +2362,23 @@ PerformSnapshot(*) {
     ToggleMacro()
 }
 
+/**
+ * 自动彼列
+ */
+AutoBilie() {
+    global uCtrl
+    res := GetWindowResolutionAndScale()
+    Counter := uCtrl["autobilie"]["count"].Value
+    points := [
+        { x: Round(1530 * res["D4SW"]), y: 1020 * res["D4SH"] },
+        { x: Round(2250 * res["D4SW"]), y: 1020 * res["D4SH"] },
+        { x: Round(690 * res["D4SW"]), y: 1640 * res["D4SH"] },
+        { x: Round(690 * res["D4SW"]), y: 1910 * res["D4SH"] }
+    ]
+    if (uCtrl["autobilie"].Has("enable") && Counter > 0 && uCtrl["autobilie"]["enable"].Value == 1) {
+        
+    }
+}
 ; ==================== 热键处理 ====================
 #HotIf WinActive("ahk_class Diablo IV Main Window Class")
 
