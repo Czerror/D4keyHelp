@@ -801,6 +801,10 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
                 ; 需要重新按住
                 needPress := true
                 lastReholdTime[uniqueKey] := currentTime
+                for key in lastReholdTime.Clone() {
+                    if (!holdStates.Has(key))
+                        lastReholdTime.Delete(key)
+                }
             }
             
             ; 执行按键动作（只在需要时执行）
