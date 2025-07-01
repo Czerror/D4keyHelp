@@ -20,8 +20,6 @@ global hotkeyControl := ""         ; 热键控件
 global myGui := ""                 ; 主GUI对象
 global statusText := ""            ; 状态文本控件
 global statusBar := ""             ; 状态栏控件
-global buffThreshold := ""         ; BUFF检测阈值滑块
-global buffThresholdValue := ""    ; 显示BUFF阈值的文本控件
 global currentProfileName := "默认" ; 当前配置名称
 global profileList := []           ; 配置列表
 
@@ -113,7 +111,7 @@ InitializeGUI() {
 ;|===============================================================|
 CreateMainGUI() {
     global myGui, statusText, hotkeyControl, currentProfileName, RunMod
-    global profileDropDown, profileNameInput, buffThreshold, buffThresholdValue
+    global profileDropDown, profileNameInput
 
     ;# ==================== 主控制区域 ==================== #
     myGui.AddGroupBox("x10 y10 w280 h120", "运行模式: ")
@@ -139,12 +137,6 @@ CreateMainGUI() {
     profileNameInput := myGui.AddEdit("x390 y35 w50 h20", currentProfileName)
     myGui.AddButton("x320 y75 w40 h25", "保存").OnEvent("Click", SaveProfile)
     myGui.AddButton("x370 y75 w40 h25", "删除").OnEvent("Click", DeleteProfile)
-
-    ;# ==================== BUFF检测设置 ==================== #
-    myGui.AddText("x30 y245", "BUFF检测阈值:")
-    buffThreshold := myGui.AddSlider("x120 y245 w100 Range50-200", 50)
-    buffThresholdValue := myGui.AddText("x220 y245 w30 h20", buffThreshold.Value)
-    buffThreshold.OnEvent("Change", (ctrl, *) => buffThresholdValue.Text := ctrl.Value)
 
     ;# ==================== 按键设置主区域 ==================== #
     myGui.AddGroupBox("x10 y210 w460 h370", "按键设置")
@@ -254,14 +246,18 @@ CreateAllControls() {
     uCtrl["ranDom"]["max"].OnEvent("LoseFocus", (*) => (
         uCtrl["ranDom"]["max"].Value := Max(uCtrl["ranDom"]["min"].Value, uCtrl["ranDom"]["max"].Value)))
 
-    ;|---------------------- 延迟设置 ------------------------|
-    uCtrl["sleepD"] := Map(
-        "text", myGui.AddText("x360 y390 w60 h20", "网络延迟:"),
-        "sleepInput", myGui.AddEdit("x420 y388 w40 h20", "60")
+    ;|-------------------- BUFF检测设置 ----------------------|
+    uCtrl["buffD"] := Map(
+        "text", myGui.AddText("x30 y245 w80 h20", "BUFF检测:"),
+        "Slider", myGui.AddSlider("x120 y245 w100 Range50-200", 50),
+        "show", myGui.AddText("x220 y245 w30 h20")
     )
-    ; 延迟输入限制(5-500ms)
-    uCtrl["sleepD"]["sleepInput"].OnEvent("LoseFocus", (*) => (
-        LimitEditValue(uCtrl["sleepD"]["sleepInput"], 5, 500)))
+
+    uCtrl["buffD"]["Slider"].OnEvent("Change", (ctrl, *) => (
+        LimitEditValue(uCtrl["buffD"]["Slider"], 50, 200))
+    )
+    uCtrl["buffD"]["Slider"].OnEvent("Change", (ctrl, *) => (
+        uCtrl["buffD"]["show"].Value := uCtrl["buffD"]["Slider"].Value))
 
     ;|---------------------- 血条检测 ------------------------|
     uCtrl["ipPause"] := Map(
@@ -716,7 +712,7 @@ StartAutoMove() {
  * @param {String} mouseBtn - 鼠标按钮名（"left"/"right"）
  */
 HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
-    global uCtrl, buffThreshold, holdStates
+    global uCtrl, holdStates
     static lastReholdTime := Map()
     static REHOLD_MIN_INTERVAL := 2000
     static shiftEnabled := uCtrl["shift"]["enable"].Value
@@ -1479,11 +1475,12 @@ AutoPauseByTAB() {
  * @returns {Boolean} - 技能是否激活
  */
 IsSkillActive(x, y) {
+    global uCtrl
     tryCount := 2
     loop tryCount {
         try {
             color := GetPixelRGB(x, y)
-            return (color.g > color.b + buffThreshold.Value)
+            return (color.g > color.b + uCtrl["buffD"]["Slider"].Value )
         } catch {
             Sleep 5
         }
@@ -1894,6 +1891,15 @@ SaveSettings(settingsFile := "", profileName := "默认") {
         }
     }
 
+    if (FileExist(settingsFile)) {
+        try {
+            FileDelete(settingsFile)
+        } catch as err {
+            statusBar.Text := "删除旧设置文件失败: " err.Message
+            return
+        }
+    }
+    
     ; 如果文件不存在，创建一个基本结构
     if (!FileExist(settingsFile)) {
         try {
@@ -2022,16 +2028,9 @@ SaveuSkillSettings(file, profileName) {
     IniWrite(uCtrl["ranDom"]["enable"].Value, file, section, "RandomEnabled")
     IniWrite(uCtrl["ranDom"]["min"].Value, file, section, "RandomMin")
     IniWrite(uCtrl["ranDom"]["max"].Value, file, section, "RandomMax")
-
-    ; 保存快照设置
-    IniWrite(uCtrl["huoDun"]["key"].Value, file, section, "HuoDunKey")
-    IniWrite(uCtrl["dianMao"]["key"].Value, file, section, "DianMaoKey")
-    IniWrite(uCtrl["dianQiu"]["key"].Value, file, section, "DianQiuKey")
-    IniWrite(uCtrl["binDun"]["key"].Value, file, section, "BinDunKey")
-    IniWrite(uCtrl["sleepD"]["sleepInput"].Value, file, section, "SnapSleepDelay")
+    IniWrite(uCtrl["buffD"]["Slider"].Value, file, section, "BuffD")
 
     ; 保存其他全局设置
-    IniWrite(buffThreshold.Value, file, section, "BuffThreshold")
     IniWrite(hotkeyControl.Value, file, section, "StartStopKey")
     IniWrite(RunMod.Value, file, section, "RunMod")
 }
@@ -2210,18 +2209,7 @@ LoaduSkillSettings(file, profileName) {
         uCtrl["ranDom"]["enable"].Value := IniRead(file, section, "RandomEnabled", "0")
         uCtrl["ranDom"]["min"].Value := IniRead(file, section, "RandomMin", "1")
         uCtrl["ranDom"]["max"].Value := IniRead(file, section, "RandomMax", "10")
-        
-        ; 加载法师技能设置
-        uCtrl["huoDun"]["key"].Value := IniRead(file, section, "HuoDunKey", "2")
-        uCtrl["dianMao"]["key"].Value := IniRead(file, section, "DianMaoKey", "1")
-        uCtrl["dianQiu"]["key"].Value := IniRead(file, section, "DianQiuKey", "e")
-        uCtrl["binDun"]["key"].Value := IniRead(file, section, "BinDunKey", "3")
-        uCtrl["sleepD"]["sleepInput"].Value := IniRead(file, section, "SnapSleepDelay", "60")
-
-        ; 加载BUFF阈值和卡快照延迟
-        thresholdValue := IniRead(file, section, "BuffThreshold", "100")
-        buffThreshold.Value := thresholdValue
-        buffThresholdValue.Text := thresholdValue
+        uCtrl["buffD"]["Slider"].Value := IniRead(file, section, "BuffD", "50")
 
         ; 加载全局热键
         hotkeyControl.Value := IniRead(file, section, "StartStopKey", "F1")
