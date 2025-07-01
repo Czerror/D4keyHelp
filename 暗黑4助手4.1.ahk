@@ -16,8 +16,6 @@ global isPaused := Map(
 
 global currentHotkey := "F1"       ; 当前热键
 global hotkeyControl := ""         ; 热键控件
-global snapHotkey := "F3"          ; 卡快照热键
-global snapHotkeyControl := ""  ; 卡快照热键控件
 ; GUI相关变量
 global myGui := ""                 ; 主GUI对象
 global statusText := ""            ; 状态文本控件
@@ -114,7 +112,7 @@ InitializeGUI() {
 ;| 功能: 创建主程序界面及所有控件
 ;|===============================================================|
 CreateMainGUI() {
-    global myGui, statusText, hotkeyControl, currentProfileName, RunMod, snapHotkeyControl
+    global myGui, statusText, hotkeyControl, currentProfileName, RunMod
     global profileDropDown, profileNameInput, buffThreshold, buffThresholdValue
 
     ;# ==================== 主控制区域 ==================== #
@@ -150,11 +148,6 @@ CreateMainGUI() {
 
     ;# ==================== 按键设置主区域 ==================== #
     myGui.AddGroupBox("x10 y210 w460 h370", "按键设置")
-
-    ;|------------------- 快照热键设置 -------------------|
-    myGui.AddGroupBox("x350 y210 w120 h210", "快照热键：")
-    snapHotkeyControl := myGui.AddHotkey("x420 y208 w50 h20", snapHotkey)
-    snapHotkeyControl.OnEvent("Change", (ctrl, *) => LoadSnapHotkey())
 
     ;|----------------------- 自动启停 -----------------------|
     myGui.AddGroupBox("x10 y130 w460 h80", "启停管理")
@@ -260,27 +253,6 @@ CreateAllControls() {
         uCtrl["ranDom"]["min"].Value := Max(1, uCtrl["ranDom"]["min"].Value)))
     uCtrl["ranDom"]["max"].OnEvent("LoseFocus", (*) => (
         uCtrl["ranDom"]["max"].Value := Max(uCtrl["ranDom"]["min"].Value, uCtrl["ranDom"]["max"].Value)))
-
-    ;|---------------------- 技能热键 ------------------------|
-    uCtrl["huoDun"] := Map(  ; 火盾
-        "text", myGui.AddText("x360 y240 w30 h20", "火盾:"),
-        "key", myGui.AddHotkey("x390 y238 w20 h20", "2")
-    )
-
-    uCtrl["dianMao"] := Map(  ; 电矛
-        "text", myGui.AddText("x360 y280 w30 h20", "电矛:"),
-        "key", myGui.AddHotkey("x390 y278 w20 h20", "1")
-    )
-
-    uCtrl["dianQiu"] := Map(  ; 电球
-        "text", myGui.AddText("x360 y320 w30 h20", "电球:"),
-        "key", myGui.AddHotkey("x390 y318 w20 h20", "e")
-    )
-
-    uCtrl["binDun"] := Map(  ; 冰盾
-        "text", myGui.AddText("x360 y360 w30 h20", "冰盾:"),
-        "key", myGui.AddHotkey("x390 y358 w20 h20", "3")
-    )
 
     ;|---------------------- 延迟设置 ------------------------|
     uCtrl["sleepD"] := Map(
@@ -1939,16 +1911,13 @@ SaveSettings(settingsFile := "", profileName := "默认") {
     if (hotkeyControl.Value = "") {
         hotkeyControl.Value := "F1"
     }
-    if (snapHotkeyControl.Value = "") {
-        snapHotkeyControl.Value := "F3"
-    }
+
     try {
         ; 保存各类设置
         SaveSkillSettings(settingsFile, profileName)
         SaveMouseSettings(settingsFile, profileName)
         SaveuSkillSettings(settingsFile, profileName)
         LoadGlobalHotkey()
-        LoadSnapHotkey()
 
         statusBar.Text := "设置已保存"
     } catch as err {
@@ -2064,7 +2033,6 @@ SaveuSkillSettings(file, profileName) {
     ; 保存其他全局设置
     IniWrite(buffThreshold.Value, file, section, "BuffThreshold")
     IniWrite(hotkeyControl.Value, file, section, "StartStopKey")
-    IniWrite(snapHotkeyControl.Value, file, section, "SnapHotkey")
     IniWrite(RunMod.Value, file, section, "RunMod")
 }
 /**
@@ -2106,7 +2074,6 @@ LoadSettings(settingsFile := "", profileName := "默认") {
 
         ; 每个配置都应用自己的热键和自动启停
         LoadGlobalHotkey()
-        LoadSnapHotkey()
         statusBar.Text := "设置已加载"
     } catch as err {
         statusBar.Text := "加载设置出错"
@@ -2258,7 +2225,6 @@ LoaduSkillSettings(file, profileName) {
 
         ; 加载全局热键
         hotkeyControl.Value := IniRead(file, section, "StartStopKey", "F1")
-        snapHotkeyControl.Value := IniRead(file, section, "SnapHotkey", "F3")
         ; 加载运行模式
         modeValue := Integer(IniRead(file, section, "RunMod", 1))
         if (modeValue = 1 || modeValue = 2) {
@@ -2296,93 +2262,6 @@ LoadGlobalHotkey() {
     }
 }
 
-/**
- * 加载卡快照热键
- */
-LoadSnapHotkey() {
-    global snapHotkey, snapHotkeyControl, statusBar
-
-    if (snapHotkeyControl.Value = "") {
-        snapHotkeyControl.Value := snapHotkey ? snapHotkey : "F3"
-        statusBar.Text := "快照热键不能为空，已恢复为: " snapHotkeyControl.Value
-        return
-    }
-
-    try {
-        if (snapHotkey != "") {
-            Hotkey(snapHotkey, PerformSnapshot, "Off")
-        }
-
-        newHotkey := snapHotkeyControl.Value
-
-        Hotkey(newHotkey, PerformSnapshot, "On")
-        snapHotkey := newHotkey
-        statusBar.Text := "快照热键已更新: " newHotkey
-    } catch as err {
-        snapHotkeyControl.Value := snapHotkey ? snapHotkey : "F3"
-        statusBar.Text := "快照热键设置失败: " err.Message
-    }
-}
-
-/**
- * 执行卡快照功能
- */
-PerformSnapshot(*) {
-    global uCtrl, mSkill
-    
-    netsleep := uCtrl["sleepD"]["sleepInput"].Value
-    ; 第一阶段：基础连招
-    Send "{Blind}{" mSkill["right"]["key"] "}"
-    Sleep netsleep
-    Send "{Blind}{" uCtrl["binDun"]["key"].Value "}"
-    Sleep netsleep
-    
-    Loop 4 {
-        Send "{Blind}{" uCtrl["dianQiu"]["key"].Value "}"
-        Sleep 350
-        Send "{Blind}{" mSkill["right"]["key"] "}"
-        Sleep netsleep
-        Send "{Blind}{" uCtrl["dodge"]["key"].Value "}"
-        Sleep 500
-    }
-
-    Send "{Blind}{" uCtrl["huoDun"]["key"].Value "}"
-    startTime := A_TickCount
-    
-    ; 紧凑化循环
-    while (A_TickCount - startTime < 2100 - netsleep) {
-        Send "{Blind}{" uCtrl["dianQiu"]["key"].Value "}"
-        Sleep netsleep
-    }
-    
-    ; 第二阶段：电矛卡快照
-    elapsedTime := A_TickCount - startTime
-    if (elapsedTime < 2400 + netsleep * 2) {
-        Sleep 2400 + netsleep * 2 - elapsedTime
-    }
-
-    Send "{Blind}{" uCtrl["dianMao"]["key"].Value "}"
-    Sleep 850
-    ToggleMacro()
-}
-
-/**
- * 自动彼列
- */
-AutoBilie() {
-    global uCtrl
-    res := GetWindowResolutionAndScale()
-    Counter := uCtrl["autobilie"]["count"].Value
-    points := [
-        { x: Round(1530 * res["D4SW"]), y: 1020 * res["D4SH"] },
-        { x: Round(2250 * res["D4SW"]), y: 1020 * res["D4SH"] },
-        { x: Round(690 * res["D4SW"]), y: 1640 * res["D4SH"] },
-        { x: Round(690 * res["D4SW"]), y: 1910 * res["D4SH"] }
-    ]
-    if (uCtrl["autobilie"].Has("enable") && Counter > 0 && uCtrl["autobilie"]["enable"].Value == 1) {
-        
-    }
-}
 ; ==================== 热键处理 ====================
 #HotIf WinActive("ahk_class Diablo IV Main Window Class")
 
