@@ -1891,15 +1891,6 @@ SaveSettings(settingsFile := "", profileName := "默认") {
         }
     }
 
-    if (FileExist(settingsFile)) {
-        try {
-            FileDelete(settingsFile)
-        } catch as err {
-            statusBar.Text := "删除旧设置文件失败: " err.Message
-            return
-        }
-    }
-    
     ; 如果文件不存在，创建一个基本结构
     if (!FileExist(settingsFile)) {
         try {
