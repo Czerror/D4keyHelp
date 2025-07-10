@@ -30,7 +30,7 @@ global mSkill := Map()      ; 鼠标控件
 global uCtrl := Map()       ; 功能键控件
 
 ; 技能模式常量
-global skillMod := ["连点", "BUFF", "按住"]
+global skillMod := ["连点", "BUFF", "按住", "资源"]
 global skillTimers := Map()   ; 用于存储各个技能的定时器ID
 ; 定时器相关变量
 global holdStates := Map()         ; 跟踪按键按住状态
@@ -299,14 +299,6 @@ CreateAllControls() {
         "text", myGui.AddText("x380 y180 w60 h20", "双击暂停:"),
         "enable", myGui.AddCheckbox("x440 y180 w20 h20")
     )
-    ;|----------------------- 自动彼列 -----------------------|
-;    uCtrl["autobilie"] := Map(
-;        "text", myGui.AddText("x270 y520 w60 h20", "自动彼列:"),
-;        "enable", myGui.AddCheckbox("x330 y518 w20 h20"),
-;        "count", myGui.AddEdit("x350 y518 w30 h20", "10"),
-;        "text", myGui.AddText("x270 y540 w60 h20", "强制交互:"),
-;        "Interaction", myGui.AddHotkey("x350 y538 w20 h20", "d")
-;    )
 
     ;|----------------------- 鼠标自动移动 -----------------------|
     uCtrl["mouseAutoMove"] := Map(
@@ -494,29 +486,30 @@ TogglePause(reason, state) {
  */
 StartAllTimers() {
     global cSkill, mSkill, uCtrl, skillTimers, RunMod
+    
     ; 清空之前的定时器
     StopAllTimers()
     GetDynamicbSkill()
+    
     if (RunMod.Value = 1) {
         ; ===== 技能按键 =====
         loop 5 {
-            skillIndex := A_Index
-            if (cSkill[skillIndex]["enable"].Value) {
-                PressSkillCallback(skillIndex)
+            if (cSkill[A_Index]["enable"].Value) {
+                PressKeyCallback("skill", A_Index)
             }
         }
         
         ; ===== 鼠标按键 =====
         for mouseBtn in ["left", "right"] {
             if (mSkill[mouseBtn]["enable"].Value) {
-                PressMouseCallback(mouseBtn)
+                PressKeyCallback("mouse", mouseBtn)
             }
         }
         
-        ; ===== 功能键 - 整合后的处理 =====
+        ; ===== 功能键 =====
         for uSkillId in ["dodge", "potion", "forceMove"] {
             if (uCtrl[uSkillId]["enable"].Value) {
-                PressuSkillKey(uSkillId)
+                PressKeyCallback("uSkill", uSkillId)
             }
         }
     } else if (RunMod.Value = 2) {
@@ -774,31 +767,25 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
                         lastReholdTime.Delete(key)
                 }
             }
-            
-            ; 执行按键动作（只在需要时执行）
-            if (needPress) {
+
+        case 4: ; 资源模式
+            if (IsResourceSufficient()) {
                 if (isMouse) {
-                    if (isHeld) {
-                        Click("up " mouseBtn)
-                    }
-                    ; 添加Shift支持
                     if (shiftEnabled) {
-                        Send "{Blind}{Shift up}"
-                        Sleep 10
-                        Send "{Blind}{Shift down}"
+                        Send "{Blind} {Shift down}"
+                        Click(mouseBtn)
+                        Send "{Blind} {Shift up}"
+                    } else {
+                        Click(mouseBtn)
                     }
-                    Click("down " mouseBtn)
                 } else {
-                    if (isHeld) {
-                        Send("{" keyOrBtn " up}")
-                    }
-                    ; 添加Shift支持
                     if (shiftEnabled) {
-                        Send "{Blind}{Shift up}"
-                        Sleep 10
-                        Send "{Blind}{Shift down}"
+                        Send "{Blind} {Shift down}"
+                        Send "{" keyOrBtn "}"
+                        Send "{Blind} {Shift up}"
+                    } else {
+                        Send "{" keyOrBtn "}"
                     }
-                    Send("{" keyOrBtn " down}")
                 }
             }
 
@@ -972,6 +959,7 @@ EnqueueKey(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", interval :=
 ; 优先级计算函数
 GetPriorityFromMode(mode) {
     switch mode {
+        case 4: return 4
         case 2: return 3
         case 3: return 2
         case 1: return 1
@@ -1037,83 +1025,57 @@ KeyQueueWorker() {
 
 ; ==================== 按键回调函数 ====================
 /**
- * 按下技能按键的回调函数
- * @param {Integer} skillId - 技能索引 (1-5)
+ * 通用按键回调函数
+ * @param {String} category - 按键类别 ("skill"|"mouse"|"uSkill")
+ * @param {String|Integer} identifier - 按键标识符 (技能索引|鼠标按钮名|功能键ID)
  */
-PressSkillCallback(skillId) {
-    global cSkill, skillTimers, RunMod, bSkill, uCtrl
-    timerKey := "skill" skillId
-    if (skillTimers.Has(timerKey)) {
-        SetTimer(skillTimers[timerKey], 0)
-        skillTimers.Delete(timerKey)
-    }
-    if (cSkill[skillId]["enable"].Value != 1)
-        return
-    config := cSkill[skillId]
-    key := cSkill[skillId]["key"].Value
-    mode := cSkill[skillId]["mode"].Value
-    pos := bSkill.Has(skillId) ? bSkill[skillId] : ""
-    interval := Integer(config["interval"].Value)
-    if (uCtrl["ranDom"]["enable"].Value == 1) {
-        interval += Random(uCtrl["ranDom"]["min"].Value, uCtrl["ranDom"]["max"].Value)
-    }
-    boundFunc := (RunMod.Value == 1)
-        ? HandleKeyMode.Bind(key, mode, pos, "key", "")
-        : EnqueueKey.Bind(key, mode, pos, "key", "", interval)
-    skillTimers[timerKey] := boundFunc
-    SetTimer(boundFunc, interval)
-}
+PressKeyCallback(category, identifier) {
+    global cSkill, mSkill, uCtrl, skillTimers, RunMod, bSkill
 
-/**
- * 按下鼠标按键的回调函数
- * @param {String} mouseBtn - 鼠标按钮名 (left/right)
- */
-PressMouseCallback(mouseBtn) {
-    global mSkill, skillTimers, RunMod, bSkill, uCtrl
-    timerKey := "mouse" mouseBtn
-    if (skillTimers.Has(timerKey)) {
-        SetTimer(skillTimers[timerKey], 0)
-        skillTimers.Delete(timerKey)
-    }
-    if (mSkill[mouseBtn]["enable"].Value != 1)
-        return
-    config := mSkill[mouseBtn]
-    mode := config["mode"].Value
-    pos := bSkill.Has(mouseBtn) ? bSkill[mouseBtn] : ""
-    interval := Integer(config["interval"].Value)
-    if (uCtrl["ranDom"]["enable"].Value == 1) {
-        interval += Random(uCtrl["ranDom"]["min"].Value, uCtrl["ranDom"]["max"].Value)
-    }
-    boundFunc := (RunMod.Value == 1)
-        ? HandleKeyMode.Bind(mouseBtn, mode, pos, "mouse", mouseBtn)
-        : EnqueueKey.Bind(mouseBtn, mode, pos, "mouse", mouseBtn, interval)
-    skillTimers[timerKey] := boundFunc
-    SetTimer(boundFunc, interval)
-}
+    timerKey := category . identifier
 
-/**
- * 按下功能键的回调函数
- * @param {String} uSkillId - 功能键ID
- */
-PressuSkillKey(uSkillId) {
-    global uCtrl, skillTimers, RunMod, bSkill
-    timerKey := "uSkill" uSkillId
     if (skillTimers.Has(timerKey)) {
         SetTimer(skillTimers[timerKey], 0)
         skillTimers.Delete(timerKey)
     }
-    if (uCtrl[uSkillId]["enable"].Value != 1)
-        return
-    config := uCtrl[uSkillId]
-    key := config["key"].Value
-    pos := bSkill.Has(uSkillId) ? bSkill[uSkillId] : ""
+
+    config := ""
+    switch category {
+        case "skill":
+            if (!cSkill.Has(identifier) || cSkill[identifier]["enable"].Value != 1)
+                return
+            config := cSkill[identifier]
+        case "mouse":
+            if (!mSkill.Has(identifier) || mSkill[identifier]["enable"].Value != 1)
+                return
+            config := mSkill[identifier]
+        case "uSkill":
+            if (!uCtrl.Has(identifier) || uCtrl[identifier]["enable"].Value != 1)
+                return
+            config := uCtrl[identifier]
+        default:
+            return
+    }
+
+    key := (category = "mouse") ? identifier : config["key"].Value
+    mode := config.Has("mode") ? config["mode"].Value : 1
+    pos := bSkill.Has(identifier) ? bSkill[identifier] : ""
     interval := Integer(config["interval"].Value)
+
     if (uCtrl["ranDom"]["enable"].Value == 1) {
         interval += Random(uCtrl["ranDom"]["min"].Value, uCtrl["ranDom"]["max"].Value)
     }
-    boundFunc := (RunMod.Value == 1)
-        ? HandleKeyMode.Bind(key, 1, pos, "key", "")
-        : EnqueueKey.Bind(key, 1, pos, "key", "", interval)
+
+    if (RunMod.Value == 1) {
+        boundFunc := (category = "mouse") 
+            ? HandleKeyMode.Bind(key, mode, pos, "mouse", identifier)
+            : HandleKeyMode.Bind(key, mode, pos, "key", "")
+    } else {
+        boundFunc := (category = "mouse")
+            ? EnqueueKey.Bind(key, mode, pos, "mouse", identifier, interval)
+            : EnqueueKey.Bind(key, mode, pos, "key", "", interval)
+    }
+
     skillTimers[timerKey] := boundFunc
     SetTimer(boundFunc, interval)
 }
@@ -1327,7 +1289,7 @@ CheckPauseByEnter(res := unset, pixelCache := unset) {
 
 
 /**
- * 血条检测函数 - AHK v2.0.19语法标准版
+ * 血条检测函数
  * @param res {Map} 窗口分辨率信息(可选)
  * @param pixelCache {Map} 像素缓存(可选)
  * @returns {Boolean} 是否检测到血条
@@ -1481,6 +1443,30 @@ IsSkillActive(x, y) {
         try {
             color := GetPixelRGB(x, y)
             return (color.g > color.b + uCtrl["buffD"]["Slider"].Value )
+        } catch {
+            Sleep 5
+        }
+    }
+    return false
+}
+
+/**
+ * 检测资源状态
+ * @returns {Boolean} - 资源是否充足
+ */
+IsResourceSufficient() {
+    ; 获取窗口分辨率信息
+    res := GetWindowResolutionAndScale()
+    
+    ; 计算资源条检测点
+    x := Round(res["CD4W"] + (2620 - res["D44KWC"]) * res["D4SW"])
+    y := Round(res["CD4H"] + (1865 - res["D44KHC"]) * res["D4SH"]) 
+
+    tryCount := 2
+    loop tryCount {
+        try {
+            color := GetPixelRGB(x, y)
+            return (color.b > color.r + color.g)
         } catch {
             Sleep 5
         }
@@ -2091,9 +2077,7 @@ LoadSkillSettings(file, profileName) {
 
             ; 设置模式下拉框
             try {
-                if (mode >= 1 && mode <= 3) {
-                    cSkill[A_Index]["mode"].Value := mode
-                }
+                cSkill[A_Index]["mode"].Value := mode
             } catch as err {
                 cSkill[A_Index]["mode"].Value := 1
             }
@@ -2134,18 +2118,14 @@ LoadMouseSettings(file, profileName) {
             uCtrl["mouseAutoMove"]["currentPoint"] := 1
         ; 设置左键模式下拉框
         try {
-            if (leftMode >= 1 && leftMode <= 3) {
-                mSkill["left"]["mode"].Value := leftMode
-            }
+            mSkill["left"]["mode"].Value := leftMode
         } catch as err {
             mSkill["left"]["mode"].Value := 1
         }
 
         ; 设置右键模式下拉框
         try {
-            if (rightMode >= 1 && rightMode <= 3) {
-                mSkill["right"]["mode"].Value := rightMode
-            }
+            mSkill["right"]["mode"].Value := rightMode
         } catch as err {
             mSkill["right"]["mode"].Value := 1
         }
