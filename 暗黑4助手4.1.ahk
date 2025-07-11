@@ -1431,12 +1431,11 @@ IsResourceSufficient() {
     
     ; 计算资源条检测点
     x := Round(res["CD4W"] + (2620 - res["D44KWC"]) * res["D4SW"])
-    y := Round(res["CD4H"] + (1865 - res["D44KHC"]) * res["D4SH"]) 
+    y := Round(res["CD4H"] + (1865 - res["D44KHC"]) * res["D4SH"])
 
-    tryCount := 2
-    loop tryCount {
+    loop 5 {
         try {
-            color := GetPixelRGB(x, y)
+            color := GetPixelRGB(x, y + (A_Index - 1))
             return (color.b > (color.r + color.g) * 0.8)
         } catch {
             Sleep 5
@@ -2135,18 +2134,18 @@ LoaduSkillSettings(file, profileName) {
             uCtrl["forceMove"]["interval"].Value := IniRead(file, section, "ForceMoveInterval", "50")
         }
         ; 加载血条检测相关设置
-        uCtrl["ipPause"]["enable"].Value := IniRead(file, section, "IpPauseEnable", "1")
+        uCtrl["ipPause"]["enable"].Value := IniRead(file, section, "IpPauseEnable", "0")
         uCtrl["ipPause"]["interval"].Value := IniRead(file, section, "IpPauseInterval", "50")
         uCtrl["ipPause"]["pauseConfirm"].Value := IniRead(file, section, "IpPausePauseConfirm", "5")
         uCtrl["ipPause"]["resumeConfirm"].Value := IniRead(file, section, "IpPauseResumeConfirm", "2")
 
         ; 加载TAB检测相关设置
-        uCtrl["tabPause"]["enable"].Value := IniRead(file, section, "TabPauseEnable", "1")
+        uCtrl["tabPause"]["enable"].Value := IniRead(file, section, "TabPauseEnable", "0")
         uCtrl["tabPause"]["interval"].Value := IniRead(file, section, "TabPauseInterval", "100")
         uCtrl["tabPause"]["pauseConfirm"].Value := IniRead(file, section, "TabPausePauseConfirm", "2")
         uCtrl["tabPause"]["resumeConfirm"].Value := IniRead(file, section, "TabPauseResumeConfirm", "2")
         ; 加载其他设置
-        uCtrl["dcPause"]["enable"].Value := IniRead(file, section, "DcPauseEnable", "1")
+        uCtrl["dcPause"]["enable"].Value := IniRead(file, section, "DcPauseEnable", "0")
         uCtrl["shift"]["enable"].Value := IniRead(file, section, "ShiftEnabled", "0")
         uCtrl["ranDom"]["enable"].Value := IniRead(file, section, "RandomEnabled", "0")
         uCtrl["ranDom"]["min"].Value := IniRead(file, section, "RandomMin", "1")
