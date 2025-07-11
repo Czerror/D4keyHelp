@@ -785,6 +785,33 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
                 }
             }
 
+            ; 执行按键动作（只在需要时执行）
+            if (needPress) {
+                if (isMouse) {
+                    if (isHeld) {
+                        Click("up " mouseBtn)
+                    }
+                    ; 添加Shift支持
+                    if (shiftEnabled) {
+                        Send "{Blind}{Shift up}"
+                        Sleep 10
+                        Send "{Blind}{Shift down}"
+                    }
+                    Click("down " mouseBtn)
+                } else {
+                    if (isHeld) {
+                        Send("{" keyOrBtn " up}")
+                    }
+                    ; 添加Shift支持
+                    if (shiftEnabled) {
+                        Send "{Blind}{Shift up}"
+                        Sleep 10
+                        Send "{Blind}{Shift down}"
+                    }
+                    Send("{" keyOrBtn " down}")
+                }
+            }
+
         case 4: ; 资源模式
             if (IsResourceSufficient()) {
                 if (isMouse) {
