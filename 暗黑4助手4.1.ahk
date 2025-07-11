@@ -126,7 +126,6 @@ CreateMainGUI() {
     RunMod.OnEvent("Change", (*) => (
         ; 模式切换时重启定时器（如果正在运行）
         (isRunning && (StopAllTimers(), StartAllTimers())),
-        (RunMod.Value = 2 && FillKeyQueue()),  ; 单线程模式需刷新队列
         UpdateStatus("", "宏已切换模式")
     ))
 
@@ -515,7 +514,27 @@ StartAllTimers() {
     } else if (RunMod.Value = 2) {
         keyQueue := []
         keyQueueLastExec := Map()
-        FillKeyQueue()
+        ; ===== 技能按键 =====
+        loop 5 {
+            if (cSkill[A_Index]["enable"].Value) {
+                PressKeyCallback("skill", A_Index)
+            }
+        }
+        
+        ; ===== 鼠标按键 =====
+        for mouseBtn in ["left", "right"] {
+            if (mSkill[mouseBtn]["enable"].Value) {
+                PressKeyCallback("mouse", mouseBtn)
+            }
+        }
+        
+        ; ===== 功能键 =====
+        for uSkillId in ["dodge", "potion", "forceMove"] {
+            if (uCtrl[uSkillId]["enable"].Value) {
+                PressKeyCallback("uSkill", uSkillId)
+            }
+        }
+
         SetTimer(KeyQueueWorker, 5)
     }
     StartAutoMove()
@@ -812,54 +831,6 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
 
 ; ==================== 队列模式实现 ====================
 /**
- * 队列填充函数：将所有启用的技能、鼠标、功能键操作入队
- */
-FillKeyQueue() {
-    global cSkill, mSkill, uCtrl, bSkill, keyQueue, keyQueueLastExec
-
-    keyQueue := []
-    keyQueueLastExec := Map()
-    
-    ; 技能
-    loop 5 {
-        idx := A_Index
-        if (cSkill[idx]["enable"].Value) {
-            EnqueueKey(
-                cSkill[idx]["key"].Value,
-                cSkill[idx]["mode"].Value,
-                bSkill.Has(idx) ? bSkill[idx] : "",
-                "key", "",
-                Integer(cSkill[idx]["interval"].Value)
-            )
-        }
-    }
-    ; 鼠标
-    for btn in ["left", "right"] {
-        if (mSkill[btn]["enable"].Value) {
-            EnqueueKey(
-                btn,
-                mSkill[btn]["mode"].Value,
-                bSkill.Has(btn) ? bSkill[btn] : "",
-                "mouse", btn,
-                Integer(mSkill[btn]["interval"].Value)
-            )
-        }
-    }
-    ; 功能键
-    for u in ["dodge", "potion", "forceMove"] {
-        if (uCtrl[u]["enable"].Value) {
-            EnqueueKey(
-                uCtrl[u]["key"].Value,
-                1,
-                bSkill.Has(u) ? bSkill[u] : "",
-                "key", "",
-                Integer(uCtrl[u]["interval"].Value)
-            )
-        }
-    }
-}
-
-/**
  * 键位入队函数
  */
 EnqueueKey(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", interval := 1000) {
@@ -1070,14 +1041,14 @@ PressKeyCallback(category, identifier) {
         boundFunc := (category = "mouse") 
             ? HandleKeyMode.Bind(key, mode, pos, "mouse", identifier)
             : HandleKeyMode.Bind(key, mode, pos, "key", "")
-    } else {
-        boundFunc := (category = "mouse")
-            ? EnqueueKey.Bind(key, mode, pos, "mouse", identifier, interval)
-            : EnqueueKey.Bind(key, mode, pos, "key", "", interval)
+        skillTimers[timerKey] := boundFunc
+        SetTimer(boundFunc, interval)
+    } else if (RunMod.Value = 2) {
+        if (category = "mouse")
+            EnqueueKey(key, mode, pos, "mouse", identifier, interval)
+        else
+            EnqueueKey(key, mode, pos, "key", "", interval)
     }
-
-    skillTimers[timerKey] := boundFunc
-    SetTimer(boundFunc, interval)
 }
 
 /**
