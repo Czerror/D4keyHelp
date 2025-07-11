@@ -1442,7 +1442,7 @@ IsSkillActive(x, y) {
     loop tryCount {
         try {
             color := GetPixelRGB(x, y)
-            return (color.g > color.b + uCtrl["buffD"]["Slider"].Value )
+            return (color.g > color.b + uCtrl["buffD"]["Slider"].Value)
         } catch {
             Sleep 5
         }
@@ -1466,7 +1466,7 @@ IsResourceSufficient() {
     loop tryCount {
         try {
             color := GetPixelRGB(x, y)
-            return (color.b > color.r + color.g)
+            return (color.b > (color.r + color.g) * 0.8)
         } catch {
             Sleep 5
         }
