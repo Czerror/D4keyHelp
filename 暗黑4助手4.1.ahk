@@ -245,17 +245,15 @@ CreateAllControls() {
     uCtrl["ranDom"]["max"].OnEvent("LoseFocus", (*) => (
         uCtrl["ranDom"]["max"].Value := Max(uCtrl["ranDom"]["min"].Value, uCtrl["ranDom"]["max"].Value)))
 
-    ;|-------------------- BUFF检测设置 ----------------------|
+    ;|-------------------- 检测阈值设置 ----------------------|
     uCtrl["buffD"] := Map(
-        "text", myGui.AddText("x30 y245 w80 h20", "BUFF检测:"),
-        "Slider", myGui.AddSlider("x120 y245 w100 Range50-200", 50),
-        "show", myGui.AddText("x220 y245 w30 h20")
+        "text", myGui.AddText("x30 y245 w100 h20", "资源/BUFF阈值:"),
+        "Slider", myGui.AddSlider("x130 y245 w100 Range5-8", 8),
+        "show", myGui.AddText("x230 y245 w30 h20", "8")
     )
 
     uCtrl["buffD"]["Slider"].OnEvent("Change", (ctrl, *) => (
-        LimitEditValue(uCtrl["buffD"]["Slider"], 50, 200))
-    )
-    uCtrl["buffD"]["Slider"].OnEvent("Change", (ctrl, *) => (
+        LimitEditValue(uCtrl["buffD"]["Slider"], 5, 8),
         uCtrl["buffD"]["show"].Value := uCtrl["buffD"]["Slider"].Value))
 
     ;|---------------------- 血条检测 ------------------------|
@@ -1409,11 +1407,12 @@ AutoPauseByTAB() {
  */
 IsSkillActive(x, y) {
     global uCtrl
+    buffD := uCtrl["buffD"]["Slider"].Value * 0.1
     tryCount := 2
     loop tryCount {
         try {
             color := GetPixelRGB(x, y)
-            return (color.g > color.b + uCtrl["buffD"]["Slider"].Value)
+            return (color.g > (color.b + color.r) * buffD)
         } catch {
             Sleep 5
         }
@@ -1426,17 +1425,19 @@ IsSkillActive(x, y) {
  * @returns {Boolean} - 资源是否充足
  */
 IsResourceSufficient() {
-    ; 获取窗口分辨率信息
+    global uCtrl
     res := GetWindowResolutionAndScale()
-    
-    ; 计算资源条检测点
+    buffD := uCtrl["buffD"]["Slider"].Value * 0.1
     x := Round(res["CD4W"] + (2620 - res["D44KWC"]) * res["D4SW"])
     y := Round(res["CD4H"] + (1865 - res["D44KHC"]) * res["D4SH"])
 
     loop 5 {
         try {
             color := GetPixelRGB(x, y + (A_Index - 1))
-            return (color.b > (color.r + color.g) * 0.8)
+            if (color.r > (color.g + color.b) * buffD || 
+                color.g > (color.r + color.b) * buffD || 
+                color.b > (color.r + color.g) * buffD)
+                return true
         } catch {
             Sleep 5
         }
@@ -2145,12 +2146,12 @@ LoaduSkillSettings(file, profileName) {
         uCtrl["tabPause"]["pauseConfirm"].Value := IniRead(file, section, "TabPausePauseConfirm", "2")
         uCtrl["tabPause"]["resumeConfirm"].Value := IniRead(file, section, "TabPauseResumeConfirm", "2")
         ; 加载其他设置
-        uCtrl["dcPause"]["enable"].Value := IniRead(file, section, "DcPauseEnable", "0")
+        uCtrl["dcPause"]["enable"].Value := IniRead(file, section, "DcPauseEnable", "1")
         uCtrl["shift"]["enable"].Value := IniRead(file, section, "ShiftEnabled", "0")
         uCtrl["ranDom"]["enable"].Value := IniRead(file, section, "RandomEnabled", "0")
         uCtrl["ranDom"]["min"].Value := IniRead(file, section, "RandomMin", "1")
         uCtrl["ranDom"]["max"].Value := IniRead(file, section, "RandomMax", "10")
-        uCtrl["buffD"]["Slider"].Value := IniRead(file, section, "BuffD", "50")
+        uCtrl["buffD"]["Slider"].Value := IniRead(file, section, "BuffD", "8")
 
         ; 加载全局热键
         hotkeyControl.Value := IniRead(file, section, "StartStopKey", "F1")
