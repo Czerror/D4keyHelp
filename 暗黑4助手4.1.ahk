@@ -248,13 +248,13 @@ CreateAllControls() {
     ;|-------------------- 检测阈值设置 ----------------------|
     uCtrl["buffD"] := Map(
         "text", myGui.AddText("x30 y245 w100 h20", "资源/BUFF阈值:"),
-        "Slider", myGui.AddSlider("x130 y245 w100 Range5-8", 8),
-        "show", myGui.AddText("x230 y245 w30 h20", "8")
+        "Slider", myGui.AddSlider("x130 y245 w100 Range6-9", 8),
+        "show", myGui.AddText("x230 y245 w30 h20", "0.8")
     )
 
     uCtrl["buffD"]["Slider"].OnEvent("Change", (ctrl, *) => (
-        LimitEditValue(uCtrl["buffD"]["Slider"], 5, 8),
-        uCtrl["buffD"]["show"].Value := uCtrl["buffD"]["Slider"].Value))
+        LimitEditValue(uCtrl["buffD"]["Slider"], 6, 9),
+        uCtrl["buffD"]["show"].Value := Format("{:.1f}", uCtrl["buffD"]["Slider"].Value * 0.1)))
 
     ;|---------------------- 血条检测 ------------------------|
     uCtrl["ipPause"] := Map(
@@ -725,7 +725,6 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
     global uCtrl, holdStates
     static lastReholdTime := Map()
     static REHOLD_MIN_INTERVAL := 2000
-    static shiftEnabled := uCtrl["shift"]["enable"].Value
 
     ; 缓存 A_TickCount
     currentTime := A_TickCount
@@ -737,8 +736,9 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
     if (IsAnyPaused())
         return
 
-    ; 预先确定是否为鼠标操作
     isMouse := (type = "mouse")
+
+    shiftEnabled := uCtrl["shift"]["enable"].Value
 
     ; 模式处理
     switch mode {
@@ -785,29 +785,28 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
                 }
             }
 
-            ; 执行按键动作（只在需要时执行）
             if (needPress) {
                 if (isMouse) {
                     if (isHeld) {
+                        if (shiftEnabled)
+                            Send "{Blind}{Shift up}"
                         Click("up " mouseBtn)
-                    }
-                    ; 添加Shift支持
-                    if (shiftEnabled) {
-                        Send "{Blind}{Shift up}"
                         Sleep 10
-                        Send "{Blind}{Shift down}"
                     }
+                    ; 重新按下
+                    if (shiftEnabled)
+                        Send "{Blind}{Shift down}"
                     Click("down " mouseBtn)
                 } else {
                     if (isHeld) {
+                        if (shiftEnabled)
+                            Send "{Blind}{Shift up}"
                         Send("{" keyOrBtn " up}")
-                    }
-                    ; 添加Shift支持
-                    if (shiftEnabled) {
-                        Send "{Blind}{Shift up}"
                         Sleep 10
-                        Send "{Blind}{Shift down}"
                     }
+                    ; 重新按下
+                    if (shiftEnabled)
+                        Send "{Blind}{Shift down}"
                     Send("{" keyOrBtn " down}")
                 }
             }
@@ -1434,7 +1433,7 @@ AutoPauseByTAB() {
  */
 IsSkillActive(x, y) {
     global uCtrl
-    buffD := uCtrl["buffD"]["Slider"].Value * 0.1
+    buffD := uCtrl["buffD"]["show"].Value
     tryCount := 2
     loop tryCount {
         try {
@@ -1454,7 +1453,7 @@ IsSkillActive(x, y) {
 IsResourceSufficient() {
     global uCtrl
     res := GetWindowResolutionAndScale()
-    buffD := uCtrl["buffD"]["Slider"].Value * 0.1
+    buffD := uCtrl["buffD"]["show"].Value
     x := Round(res["CD4W"] + (2620 - res["D44KWC"]) * res["D4SW"])
     y := Round(res["CD4H"] + (1875 - res["D44KHC"]) * res["D4SH"])
 
