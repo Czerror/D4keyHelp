@@ -1456,7 +1456,7 @@ IsResourceSufficient() {
     res := GetWindowResolutionAndScale()
     buffD := uCtrl["buffD"]["Slider"].Value * 0.1
     x := Round(res["CD4W"] + (2620 - res["D44KWC"]) * res["D4SW"])
-    y := Round(res["CD4H"] + (1865 - res["D44KHC"]) * res["D4SH"])
+    y := Round(res["CD4H"] + (1875 - res["D44KHC"]) * res["D4SH"])
 
     loop 5 {
         try {
