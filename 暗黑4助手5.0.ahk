@@ -74,7 +74,7 @@ InitializeGUI() {
     global myGui, statusBar
 
     ;# ==================== GUI基础设置 ==================== #
-    myGui := Gui("", "暗黑4助手 v4.1")
+    myGui := Gui("", "暗黑4助手 v5.0")
     myGui.BackColor := "FFFFFF"                    ; 背景色设为白色
     myGui.SetFont("s10", "Microsoft YaHei UI")    ; 设置默认字体
 
@@ -1280,13 +1280,13 @@ CheckPauseByEnter(res := unset, pixelCache := unset) {
 
         isRedHue := (hsv.h <= 30 || hsv.h >= 330)  ; 红色色相范围
         isSaturated := (hsv.s > 0.5)               ; 饱和度大于50%
-        isBright := (hsv.v > 0.23)                 ; 亮度大于23%
-        
+        isBright := (hsv.v > 0.3)                 ; 亮度大于30%
+
         if (isRedHue && isSaturated && isBright) {
 
             grayHsv := RGBToHSV(grayColor.r, grayColor.g, grayColor.b)
             
-            isGrayBackground := (grayHsv.s < 0.3 && grayHsv.v < 0.4)
+            isGrayBackground := (grayHsv.s < 0.3 && grayHsv.v < 0.3)
             
             return isGrayBackground
         }
