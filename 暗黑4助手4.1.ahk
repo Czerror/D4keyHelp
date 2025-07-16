@@ -229,32 +229,18 @@ CreateAllControls() {
 
     ;|---------------------- 辅助功能 ------------------------|
     uCtrl["shift"] := Map(   ; Shift键辅助
-        "text",   myGui.AddText("x360 y430 w40 h20", "Shift:"),
-        "enable", myGui.AddCheckbox("x400 y428 w20 h20")
+        "text",   myGui.AddText("x30 y240 w40 h20", "Shift:"),
+        "enable", myGui.AddCheckbox("x65 y240 w15 h15")
     )
 
     uCtrl["ranDom"] := Map(  ; 随机延迟
-        "text", myGui.AddText("x270 y490 w60 h20", "随机延迟:"),
-        "enable", myGui.AddCheckbox("x330 y488 w20 h20"),
-        "min", myGui.AddEdit("x350 y488 w30 h20", "1"),
-        "max", myGui.AddEdit("x380 y488 w30 h20", "10")
+        "text", myGui.AddText("x240 y240 w60 h20", "随机延迟:"),
+        "enable", myGui.AddCheckbox("x300 y240 w15 h15"),
+        "max", myGui.AddEdit("x320 y238 w30 h20", "10")
     )
 
-    uCtrl["ranDom"]["min"].OnEvent("LoseFocus", (*) => (
-        uCtrl["ranDom"]["min"].Value := Max(1, uCtrl["ranDom"]["min"].Value)))
     uCtrl["ranDom"]["max"].OnEvent("LoseFocus", (*) => (
-        uCtrl["ranDom"]["max"].Value := Max(uCtrl["ranDom"]["min"].Value, uCtrl["ranDom"]["max"].Value)))
-
-    ;|-------------------- 检测阈值设置 ----------------------|
-    uCtrl["buffD"] := Map(
-        "text", myGui.AddText("x30 y245 w100 h20", "资源/BUFF阈值:"),
-        "Slider", myGui.AddSlider("x130 y245 w100 Range6-9", 8),
-        "show", myGui.AddText("x230 y245 w30 h20", "0.8")
-    )
-
-    uCtrl["buffD"]["Slider"].OnEvent("Change", (ctrl, *) => (
-        LimitEditValue(uCtrl["buffD"]["Slider"], 6, 9),
-        uCtrl["buffD"]["show"].Value := Format("{:.1f}", uCtrl["buffD"]["Slider"].Value * 0.1)))
+        uCtrl["ranDom"]["max"].Value := Max(1, uCtrl["ranDom"]["max"].Value)))
 
     ;|---------------------- 血条检测 ------------------------|
     uCtrl["ipPause"] := Map(
@@ -299,9 +285,9 @@ CreateAllControls() {
 
     ;|----------------------- 鼠标自动移动 -----------------------|
     uCtrl["mouseAutoMove"] := Map(
-        "text", myGui.AddText("x360 y460 w30 h20", "自移:"),
-        "enable", myGui.AddCheckbox("x400 y460 w15 h15"),
-        "interval", myGui.AddEdit("x420 y458 w40 h20", "1000"),
+        "text", myGui.AddText("x100 y240 w60 h20", "鼠标自移:"),
+        "enable", myGui.AddCheckbox("x160 y240 w15 h15"),
+        "interval", myGui.AddEdit("x180 y238 w40 h20", "1000"),
         "currentPoint", 1  ; 移动点位标记
     )
 }
@@ -1058,7 +1044,7 @@ PressKeyCallback(category, identifier) {
     interval := Integer(config["interval"].Value)
 
     if (uCtrl["ranDom"]["enable"].Value == 1) {
-        interval += Random(uCtrl["ranDom"]["min"].Value, uCtrl["ranDom"]["max"].Value)
+        interval += Random(1, uCtrl["ranDom"]["max"].Value)
     }
 
     if (RunMod.Value == 1) {
@@ -1234,11 +1220,26 @@ CheckKeyPoints(res, pixelCache := unset) {
         colorDFX := (IsSet(pixelCache) && pixelCache.Has("dfx")) ? pixelCache["dfx"] : GetPixelRGB(dfx, dty)
         colorTAB := (IsSet(pixelCache) && pixelCache.Has("tab")) ? pixelCache["tab"] : GetPixelRGB(tabx, taby)
         
+        dfxHSV := RGBToHSV(colorDFX.r, colorDFX.g, colorDFX.b)
+        tabHSV := RGBToHSV(colorTAB.r, colorTAB.g, colorTAB.b)
+        
+        ; 蓝色检测
+        ; 色相范围：180-270度（蓝色到蓝紫色）
+        ; 饱和度 > 0.3（足够鲜艳）
+        ; 亮度 > 0.3（足够明亮）
+        isBlueDFX := (dfxHSV.h >= 180 && dfxHSV.h <= 270 && dfxHSV.s > 0.3 && dfxHSV.v > 0.2)
+        
+        ; 红色检测
+        ; 色相范围：0-30度或330-360度（红色光谱）
+        ; 饱和度 > 0.5（足够鲜艳）
+        ; 亮度 > 0.3（足够明亮）
+        isRedTAB := ((tabHSV.h <= 30 || tabHSV.h >= 330) && tabHSV.s > 0.5 && tabHSV.v > 0.2)
+        
         return {
             dfxcolor: colorDFX,
             tabcolor: colorTAB,
-            isBlueColor: (colorDFX.r + 50 < colorDFX.b && colorDFX.b >= 100),
-            isRedColor: (colorTAB.r > 100 && colorTAB.g < 60 && colorTAB.b < 60),
+            isBlueColor: isBlueDFX,
+            isRedColor: isRedTAB,
             positions: { dfx: dfx, dty: dty, tabx: tabx, taby: taby }
         }
     } catch {
@@ -1275,13 +1276,23 @@ CheckPauseByEnter(res := unset, pixelCache := unset) {
             ? pixelCache["enter" A_Index] 
             : GetPixelRGB(x, Round(res["CD4H"] + (1440 - res["D44KHC"]) * res["D4SH"]))
         
-        if (colorObj.r > (colorObj.g + colorObj.b) * 8 && colorObj.r > 60) {
-            return (grayColor.r < 100 && grayColor.g < 85 && grayColor.b < 85)
+        hsv := RGBToHSV(colorObj.r, colorObj.g, colorObj.b)
+
+        isRedHue := (hsv.h <= 30 || hsv.h >= 330)  ; 红色色相范围
+        isSaturated := (hsv.s > 0.5)               ; 饱和度大于50%
+        isBright := (hsv.v > 0.23)                 ; 亮度大于23%
+        
+        if (isRedHue && isSaturated && isBright) {
+
+            grayHsv := RGBToHSV(grayColor.r, grayColor.g, grayColor.b)
+            
+            isGrayBackground := (grayHsv.s < 0.3 && grayHsv.v < 0.4)
+            
+            return isGrayBackground
         }
     }
     return false
 }
-
 
 /**
  * 血条检测函数
@@ -1301,10 +1312,18 @@ CheckPauseByBlood(res := unset, pixelCache := unset) {
                 y := Round(res["CD4H"] + ([85, 95][A_Index] - res["D44KHC"]) * res["D4SH"])
                 key := "blood" ((A_Index - 1) * 2 + A_Index)
                 color := (IsSet(pixelCache) && pixelCache.Has(key)) ? pixelCache[key] : GetPixelRGB(x, y)
-                if (color.r > (color.g + color.b) * 2 && color.r > 100)
+                
+                hsv := RGBToHSV(color.r, color.g, color.b)
+
+                isRedHue := (hsv.h <= 30 || hsv.h >= 330)  ; 红色色相范围
+                isSaturated := (hsv.s > 0.5)               ; 饱和度大于50%
+                isBright := (hsv.v > 0.2)                  ; 亮度大于20%
+
+                if (isRedHue && isSaturated && isBright) {
                     hitCount++
-                if (hitCount >= 2)
-                    return true
+                    if (hitCount >= 2)
+                        return true
+                }
             }
         }
         return false
@@ -1433,12 +1452,15 @@ AutoPauseByTAB() {
  */
 IsSkillActive(x, y) {
     global uCtrl
-    buffD := uCtrl["buffD"]["show"].Value
-    tryCount := 2
-    loop tryCount {
+    loop 2 {
         try {
-            color := GetPixelRGB(x, y)
-            return (color.g > (color.b + color.r) * buffD)
+            color := GetPixelRGBNoCache(x, y)
+            hsv := RGBToHSV(color.r, color.g, color.b)
+            isGreenHue := (hsv.h >= 60 && hsv.h <= 180)  ; 绿色色相范围
+            isSaturated := (hsv.s > 0.3)  ; 饱和度大于30%
+            isBright := (hsv.v > 0.2)  ; 亮度大于20%
+            if (isGreenHue && isSaturated && isBright)
+                return true
         } catch {
             Sleep 5
         }
@@ -1453,16 +1475,16 @@ IsSkillActive(x, y) {
 IsResourceSufficient() {
     global uCtrl
     res := GetWindowResolutionAndScale()
-    buffD := uCtrl["buffD"]["show"].Value
     x := Round(res["CD4W"] + (2620 - res["D44KWC"]) * res["D4SW"])
     y := Round(res["CD4H"] + (1875 - res["D44KHC"]) * res["D4SH"])
 
     loop 5 {
         try {
-            color := GetPixelRGB(x, y + (A_Index - 1))
-            if (color.r > (color.g + color.b) * buffD || 
-                color.g > (color.r + color.b) * buffD || 
-                color.b > (color.r + color.g) * buffD)
+            color := GetPixelRGBNoCache(x, y + (A_Index - 1))
+            
+            hsv := RGBToHSV(color.r, color.g, color.b)
+            
+            if (hsv.s > 0.30 && hsv.v > 0.15)
                 return true
         } catch {
             Sleep 5
@@ -1533,6 +1555,45 @@ GetPixelRGB(x, y, useCache := true) {
     } catch as err {
         return { r: 0, g: 0, b: 0 }  ; 失败时返回黑色
     }
+}
+
+/**
+ * RGB转HSV
+ * @param {Integer} r - 红色分量 (0-255)
+ * @param {Integer} g - 绿色分量 (0-255) 
+ * @param {Integer} b - 蓝色分量 (0-255)
+ * @returns {Object} - 包含h,s,v的对象
+ */
+RGBToHSV(r, g, b) {
+    ; 转换为0-1范围
+    r := r / 255.0
+    g := g / 255.0  
+    b := b / 255.0
+    
+    ; 找到最大最小值
+    max_val := Max(r, g, b)
+    min_val := Min(r, g, b)
+    diff := max_val - min_val
+    
+    ; 计算亮度(Value)
+    v := max_val
+    
+    ; 计算饱和度(Saturation)
+    s := (max_val == 0) ? 0 : (diff / max_val)
+    
+    ; 计算色相(Hue)
+    h := 0
+    if (diff != 0) {
+        if (max_val == r) {
+            h := 60 * Mod((g - b) / diff, 6)
+        } else if (max_val == g) {
+            h := 60 * ((b - r) / diff + 2)
+        } else {
+            h := 60 * ((r - g) / diff + 4)
+        }
+    }
+    
+    return {h: h, s: s, v: v}
 }
 
 /**
@@ -2000,9 +2061,7 @@ SaveuSkillSettings(file, profileName) {
     IniWrite(uCtrl["dcPause"]["enable"].Value, file, section, "DcPauseEnable")
     IniWrite(uCtrl["shift"]["enable"].Value, file, section, "ShiftEnabled")
     IniWrite(uCtrl["ranDom"]["enable"].Value, file, section, "RandomEnabled")
-    IniWrite(uCtrl["ranDom"]["min"].Value, file, section, "RandomMin")
     IniWrite(uCtrl["ranDom"]["max"].Value, file, section, "RandomMax")
-    IniWrite(uCtrl["buffD"]["Slider"].Value, file, section, "BuffD")
 
     ; 保存其他全局设置
     IniWrite(hotkeyControl.Value, file, section, "StartStopKey")
@@ -2175,9 +2234,7 @@ LoaduSkillSettings(file, profileName) {
         uCtrl["dcPause"]["enable"].Value := IniRead(file, section, "DcPauseEnable", "1")
         uCtrl["shift"]["enable"].Value := IniRead(file, section, "ShiftEnabled", "0")
         uCtrl["ranDom"]["enable"].Value := IniRead(file, section, "RandomEnabled", "0")
-        uCtrl["ranDom"]["min"].Value := IniRead(file, section, "RandomMin", "1")
         uCtrl["ranDom"]["max"].Value := IniRead(file, section, "RandomMax", "10")
-        uCtrl["buffD"]["Slider"].Value := IniRead(file, section, "BuffD", "8")
 
         ; 加载全局热键
         hotkeyControl.Value := IniRead(file, section, "StartStopKey", "F1")
