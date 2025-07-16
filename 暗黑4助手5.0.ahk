@@ -1224,16 +1224,10 @@ CheckKeyPoints(res, pixelCache := unset) {
         tabHSV := RGBToHSV(colorTAB.r, colorTAB.g, colorTAB.b)
         
         ; 蓝色检测
-        ; 色相范围：180-270度（蓝色到蓝紫色）
-        ; 饱和度 > 0.3（足够鲜艳）
-        ; 亮度 > 0.3（足够明亮）
         isBlueDFX := (dfxHSV.h >= 180 && dfxHSV.h <= 270 && dfxHSV.s > 0.3 && dfxHSV.v > 0.2)
         
         ; 红色检测
-        ; 色相范围：0-30度或330-360度（红色光谱）
-        ; 饱和度 > 0.5（足够鲜艳）
-        ; 亮度 > 0.3（足够明亮）
-        isRedTAB := ((tabHSV.h <= 30 || tabHSV.h >= 330) && tabHSV.s > 0.5 && tabHSV.v > 0.2)
+        isRedTAB := ((tabHSV.h <= 30 || tabHSV.h >= 330) && tabHSV.s > 0.7 && tabHSV.v > 0.3)
         
         return {
             dfxcolor: colorDFX,
@@ -1279,8 +1273,8 @@ CheckPauseByEnter(res := unset, pixelCache := unset) {
         hsv := RGBToHSV(colorObj.r, colorObj.g, colorObj.b)
 
         isRedHue := (hsv.h <= 30 || hsv.h >= 330)  ; 红色色相范围
-        isSaturated := (hsv.s > 0.5)               ; 饱和度大于50%
-        isBright := (hsv.v > 0.3)                 ; 亮度大于30%
+        isSaturated := (hsv.s > 0.7)               ; 饱和度
+        isBright := (hsv.v > 0.35)                 ; 亮度
 
         if (isRedHue && isSaturated && isBright) {
 
@@ -1316,8 +1310,8 @@ CheckPauseByBlood(res := unset, pixelCache := unset) {
                 hsv := RGBToHSV(color.r, color.g, color.b)
 
                 isRedHue := (hsv.h <= 30 || hsv.h >= 330)  ; 红色色相范围
-                isSaturated := (hsv.s > 0.5)               ; 饱和度大于50%
-                isBright := (hsv.v > 0.2)                  ; 亮度大于20%
+                isSaturated := (hsv.s > 0.7)               ; 饱和度大于70%
+                isBright := (hsv.v > 0.4)  ; 亮度大于40%
 
                 if (isRedHue && isSaturated && isBright) {
                     hitCount++
