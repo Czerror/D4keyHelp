@@ -12,7 +12,7 @@ global isPaused := Map(
     "enter", false,  ; Enter键检测
     "tab", false,  ; 界面检测
     "blood", false      ; 血条检测
-)  
+)
 
 global currentHotkey := "F1"       ; 当前热键
 global hotkeyControl := ""         ; 热键控件
@@ -74,7 +74,7 @@ InitializeGUI() {
     global myGui, statusBar
 
     ;# ==================== GUI基础设置 ==================== #
-    myGui := Gui("", "暗黑4助手 v5.0")
+    myGui := Gui("", "暗黑4助手 v5.0.1")
     myGui.BackColor := "FFFFFF"                    ; 背景色设为白色
     myGui.SetFont("s10", "Microsoft YaHei UI")    ; 设置默认字体
 
@@ -125,7 +125,8 @@ CreateMainGUI() {
     RunMod := myGui.AddDropDownList("x90 y8 w65 h60 Choose1", ["多线程", "单线程"])
     RunMod.OnEvent("Change", (*) => (
         ; 模式切换时重启定时器（如果正在运行）
-        (isRunning && (StopAllTimers(), StartAllTimers())),
+        (isRunning && (StopAllTimers(), StartAllTimers())
+        ),
         UpdateStatus("", "宏已切换模式")
     ))
 
@@ -152,46 +153,46 @@ CreateMainGUI() {
 ;|===============================================================|
 CreateAllControls() {
     global myGui, cSkill, mSkill, uCtrl, skillMod
-    
+
     cSkill := Map()
     mSkill := Map()
-    uCtrl  := Map()
+    uCtrl := Map()
 
     ;|----------------------- 技能配置 -----------------------|
     loop 5 {
         yPos := 280 + (A_Index - 1) * 30
-        
+
         ; 技能标签
         myGui.AddText("x30 y" yPos " w40 h20", "技能" A_Index ":")
-        
+
         ; 技能配置Map
         cSkill[A_Index] := Map(
-            "key",     myGui.AddHotkey("x90 y" yPos " w30 h20", A_Index),
-            "enable",  myGui.AddCheckbox("x130 y" yPos " w45 h20", "启用"),
+            "key", myGui.AddHotkey("x90 y" yPos " w30 h20", A_Index),
+            "enable", myGui.AddCheckbox("x130 y" yPos " w45 h20", "启用"),
             "interval", myGui.AddEdit("x200 y" yPos " w40 h20", "20"),
-            "mode",    myGui.AddDropDownList("x270 y" yPos " w60 h120 Choose1", skillMod)
+            "mode", myGui.AddDropDownList("x270 y" yPos " w60 h120 Choose1", skillMod)
         )
-        
+
         ; 间隔时间单位标签
         myGui.AddText("x240 y" yPos + 5 " w20 h15", "ms")
     }
 
     ;|----------------------- 左键配置 -----------------------|
     mSkill["left"] := Map(
-        "text",    myGui.AddText("x30 y430 w40 h20", "左键:"),
-        "key",     "LButton",  ; 固定键值
-        "enable",  myGui.AddCheckbox("x130 y430 w45 h20", "启用"),
+        "text", myGui.AddText("x30 y430 w40 h20", "左键:"),
+        "key", "LButton",  ; 固定键值
+        "enable", myGui.AddCheckbox("x130 y430 w45 h20", "启用"),
         "interval", myGui.AddEdit("x200 y430 w40 h20", "80"),
-        "mode",    myGui.AddDropDownList("x270 y430 w60 h120 Choose1", skillMod)
+        "mode", myGui.AddDropDownList("x270 y430 w60 h120 Choose1", skillMod)
     )
 
     ;|----------------------- 右键配置 -----------------------|
     mSkill["right"] := Map(
-        "text",    myGui.AddText("x30 y460 w40 h20", "右键:"),
-        "key",     "RButton",  ; 固定键值
-        "enable",  myGui.AddCheckbox("x130 y460 w45 h20", "启用"),
+        "text", myGui.AddText("x30 y460 w40 h20", "右键:"),
+        "key", "RButton",  ; 固定键值
+        "enable", myGui.AddCheckbox("x130 y460 w45 h20", "启用"),
         "interval", myGui.AddEdit("x200 y460 w40 h20", "300"),
-        "mode",    myGui.AddDropDownList("x270 y460 w60 h120 Choose1", skillMod)
+        "mode", myGui.AddDropDownList("x270 y460 w60 h120 Choose1", skillMod)
     )
 
     ; 为鼠标控件添加ms单位标签
@@ -202,24 +203,24 @@ CreateAllControls() {
 
     ;|---------------------- 基础功能 ------------------------|
     uCtrl["potion"] := Map(
-        "text",    myGui.AddText("x30 y490 w30 h20", "喝药:"),
-        "key",    myGui.AddHotkey("x90 y488 w30 h20", "q"),
-        "enable",  myGui.AddCheckbox("x130 y490 w45 h20", "启用"),
+        "text", myGui.AddText("x30 y490 w30 h20", "喝药:"),
+        "key", myGui.AddHotkey("x90 y488 w30 h20", "q"),
+        "enable", myGui.AddCheckbox("x130 y490 w45 h20", "启用"),
         "interval", myGui.AddEdit("x200 y490 w40 h20", "3000")
     )
 
     uCtrl["forceMove"] := Map(
-        "text",    myGui.AddText("x30 y520 w30 h20", "强移:"),
-        "key",    myGui.AddHotkey("x90 y518 w30 h20", "f"),
-        "enable",  myGui.AddCheckbox("x130 y520 w45 h20", "启用"),
+        "text", myGui.AddText("x30 y520 w30 h20", "强移:"),
+        "key", myGui.AddHotkey("x90 y518 w30 h20", "f"),
+        "enable", myGui.AddCheckbox("x130 y520 w45 h20", "启用"),
         "interval", myGui.AddEdit("x200 y520 w40 h20", "50")
     )
 
     ;|---------------------- 闪避功能 ------------------------|
     uCtrl["dodge"] := Map(
-        "text",    myGui.AddText("x30 y555 w30 h20", "闪避:"),
-        "key",    myGui.AddHotkey("x90 y553 w30 h20", "Space"),
-        "enable",  myGui.AddCheckbox("x130 y550 w45 h20", "启用"),
+        "text", myGui.AddText("x30 y555 w30 h20", "闪避:"),
+        "key", myGui.AddHotkey("x90 y553 w30 h20", "Space"),
+        "enable", myGui.AddCheckbox("x130 y550 w45 h20", "启用"),
         "interval", myGui.AddEdit("x200 y550 w40 h20", "20")
     )
     ; 闪避键空值保护
@@ -229,7 +230,7 @@ CreateAllControls() {
 
     ;|---------------------- 辅助功能 ------------------------|
     uCtrl["shift"] := Map(   ; Shift键辅助
-        "text",   myGui.AddText("x30 y240 w40 h20", "Shift:"),
+        "text", myGui.AddText("x30 y240 w40 h20", "Shift:"),
         "enable", myGui.AddCheckbox("x65 y240 w15 h15")
     )
 
@@ -372,7 +373,7 @@ ToggleMacro(*) {
  */
 ReleaseAllKeys() {
     global holdStates, uCtrl
-    
+
     ; 释放所有跟踪的按键
     for uniqueKey, _ in holdStates {
         try {
@@ -380,15 +381,15 @@ ReleaseAllKeys() {
             arr := StrSplit(uniqueKey, ":")
             if (arr.Length < 2)
                 continue
-                
+
             type := arr[1]
             fullKey := arr[2]
-            
+
             ; 移除前缀
             if (type = "mouse") {
                 btn := SubStr(fullKey, 7)  ; 移除"mouse_"前缀
                 Click("up " btn)
-            } 
+            }
             else if (type = "key") {
                 key := SubStr(fullKey, 5)   ; 移除"key_"前缀
                 Send("{" key " up}")
@@ -430,7 +431,7 @@ TogglePause(reason, state) {
 
     ; 恢复时只检测对应原因的条件
     if !state {
-        res := GetWindowResolutionAndScale()
+        res := GetWindowInfo()
         pixelCache := Map()
         if (reason = "window") {
             if !WinActive("ahk_class Diablo IV Main Window Class")
@@ -469,11 +470,11 @@ TogglePause(reason, state) {
  */
 StartAllTimers() {
     global cSkill, mSkill, uCtrl, skillTimers, RunMod
-    
+
     ; 清空之前的定时器
     StopAllTimers()
     GetDynamicbSkill()
-    
+
     if (RunMod.Value = 1) {
         ; ===== 技能按键 =====
         loop 5 {
@@ -481,14 +482,14 @@ StartAllTimers() {
                 PressKeyCallback("skill", A_Index)
             }
         }
-        
+
         ; ===== 鼠标按键 =====
         for mouseBtn in ["left", "right"] {
             if (mSkill[mouseBtn]["enable"].Value) {
                 PressKeyCallback("mouse", mouseBtn)
             }
         }
-        
+
         ; ===== 功能键 =====
         for uSkillId in ["dodge", "potion", "forceMove"] {
             if (uCtrl[uSkillId]["enable"].Value) {
@@ -504,14 +505,14 @@ StartAllTimers() {
                 PressKeyCallback("skill", A_Index)
             }
         }
-        
+
         ; ===== 鼠标按键 =====
         for mouseBtn in ["left", "right"] {
             if (mSkill[mouseBtn]["enable"].Value) {
                 PressKeyCallback("mouse", mouseBtn)
             }
         }
-        
+
         ; ===== 功能键 =====
         for uSkillId in ["dodge", "potion", "forceMove"] {
             if (uCtrl[uSkillId]["enable"].Value) {
@@ -671,7 +672,7 @@ RefreshDetection(*) {
 CleanPixelCache() {
     static lastCacheClear := 0
     static pixelCache := Map()
-    
+
     ; 直接重置缓存Map和清理时间
     pixelCache := Map()
     lastCacheClear := A_TickCount
@@ -731,7 +732,7 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
         case 2: ; BUFF模式
             if (pos && IsSkillActive(pos.x, pos.y))
                 return
-            
+
             if (isMouse) {
                 if (shiftEnabled) {
                     Send "{Blind} {Shift down}"
@@ -753,15 +754,15 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
         case 3: ; 按住模式
             needPress := false
             isHeld := holdStates.Has(uniqueKey) && holdStates[uniqueKey]
-            
+
             if (!isHeld) {
                 ; 首次按下
                 needPress := true
                 holdStates[uniqueKey] := true
                 lastReholdTime[uniqueKey] := currentTime
-            } 
-            else if (!lastReholdTime.Has(uniqueKey) || 
-                    (currentTime - lastReholdTime[uniqueKey] > REHOLD_MIN_INTERVAL)) {
+            }
+            else if (!lastReholdTime.Has(uniqueKey) ||
+            (currentTime - lastReholdTime[uniqueKey] > REHOLD_MIN_INTERVAL)) {
                 ; 需要重新按住
                 needPress := true
                 lastReholdTime[uniqueKey] := currentTime
@@ -846,7 +847,7 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
 EnqueueKey(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", interval := 1000) {
     global keyQueue
     static maxLen := 20
-    
+
     ; 快速生成唯一ID
     uniqueId := type ":" (type = "mouse" ? mouseBtn : keyOrBtn)
     priority := GetPriorityFromMode(mode)
@@ -855,15 +856,15 @@ EnqueueKey(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", interval :=
     ; 快速查找现有项
     existingIndex := 0
     loop keyQueue.Length {
-        if (keyQueue[A_Index].type ":" 
-           (keyQueue[A_Index].type = "mouse" ? keyQueue[A_Index].mouseBtn : keyQueue[A_Index].keyOrBtn) = uniqueId) {
+        if (keyQueue[A_Index].type ":"
+            (keyQueue[A_Index].type = "mouse" ? keyQueue[A_Index].mouseBtn : keyQueue[A_Index].keyOrBtn) = uniqueId) {
             existingIndex := A_Index
             break
         }
     }
 
     ; 创建新项
-    item := { 
+    item := {
         keyOrBtn: keyOrBtn,
         mode: mode,
         pos: pos,
@@ -882,18 +883,18 @@ EnqueueKey(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", interval :=
     if (keyQueue.Length >= maxLen) {
         lowestPriority := priority
         lowestIndex := 0
-        
+
         ; 单次遍历查找最低优先级项
         loop keyQueue.Length {
             idx := A_Index
             qItem := keyQueue[idx]
-            if (qItem.priority < lowestPriority || 
-               (qItem.priority == lowestPriority && qItem.time < (lowestIndex ? keyQueue[lowestIndex].time : 0))) {
+            if (qItem.priority < lowestPriority ||
+                (qItem.priority == lowestPriority && qItem.time < (lowestIndex ? keyQueue[lowestIndex].time : 0))) {
                 lowestPriority := qItem.priority
                 lowestIndex := idx
             }
         }
-        
+
         if (lowestIndex > 0 && priority >= lowestPriority)
             keyQueue.RemoveAt(lowestIndex)
         else if (existingIndex == 0)
@@ -909,11 +910,11 @@ EnqueueKey(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", interval :=
     ; 优化二分查找
     left := 1
     right := keyQueue.Length
-    
+
     ; 边界检查
     firstPriority := keyQueue[1].priority
     lastPriority := keyQueue[right].priority
-    
+
     if (priority > firstPriority) {
         keyQueue.InsertAt(1, item)
         return
@@ -927,8 +928,8 @@ EnqueueKey(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", interval :=
     while (right - left > 1) {
         mid := (left + right) >> 1
         midItem := keyQueue[mid]
-        if (priority > midItem.priority || 
-           (priority == midItem.priority && now > midItem.time))
+        if (priority > midItem.priority ||
+            (priority == midItem.priority && now > midItem.time))
             right := mid
         else
             left := mid
@@ -954,7 +955,7 @@ GetPriorityFromMode(mode) {
  */
 KeyQueueWorker() {
     global keyQueue, keyQueueLastExec
-    
+
     ; 快速初始化检查
     if !IsObject(keyQueue)
         keyQueue := []
@@ -976,7 +977,7 @@ KeyQueueWorker() {
         item := keyQueue[A_Index]
         uniqueId := item.type ":" (item.type = "mouse" ? item.mouseBtn : item.keyOrBtn)
         lastExec := keyQueueLastExec.Get(uniqueId, 0)
-        
+
         ; 优化时间差计算
         if ((now - lastExec) >= item.interval) {
             HandleKeyMode(item.keyOrBtn, item.mode, item.pos, item.type, item.mouseBtn)
@@ -1048,7 +1049,7 @@ PressKeyCallback(category, identifier) {
     }
 
     if (RunMod.Value == 1) {
-        boundFunc := (category = "mouse") 
+        boundFunc := (category = "mouse")
             ? HandleKeyMode.Bind(key, mode, pos, "mouse", identifier)
             : HandleKeyMode.Bind(key, mode, pos, "key", "")
         skillTimers[timerKey] := boundFunc
@@ -1073,7 +1074,7 @@ MoveMouseToNextPoint() {
 
     try {
         ; 获取分辨率和缩放比例
-        res := GetWindowResolutionAndScale()
+        res := GetWindowInfo()
 
         ; 计算六个点的位置
         points := [
@@ -1145,7 +1146,7 @@ OnWindowChange(isActive) {
  * @param D44KHC {Integer} 参考分辨率中心Y坐标(默认1080)
  * @returns {Map} 包含窗口尺寸和缩放比例信息的Map对象
  */
-GetWindowResolutionAndScale(D44KW := 3840, D44KH := 2160, D44KWC := 1920, D44KHC := 1080) {
+GetWindowInfo(D44KW := 3840, D44KH := 2160, D44KWC := 1920, D44KHC := 1080) {
     D4Windows := Map(
         "D4W", 0.0,       ; 客户区实际宽度
         "D4H", 0.0,       ; 客户区实际高度
@@ -1190,8 +1191,8 @@ GetWindowResolutionAndScale(D44KW := 3840, D44KH := 2160, D44KWC := 1920, D44KHC
  */
 GetDynamicbSkill() {
     global bSkill
-    res := GetWindowResolutionAndScale()
-    
+    res := GetWindowInfo()
+
     bSkill.Clear()
     loop 6 {
         idx := A_Index
@@ -1216,19 +1217,19 @@ CheckKeyPoints(res, pixelCache := unset) {
         dty := Round(res["CD4H"] + (1880 - res["D44KHC"]) * res["D4SH"])
         tabx := Round(res["CD4W"] + (3795 - res["D44KWC"]) * res["D4SW"])
         taby := Round(res["CD4H"] + (90 - res["D44KHC"]) * res["D4SH"])
-        
+
         colorDFX := (IsSet(pixelCache) && pixelCache.Has("dfx")) ? pixelCache["dfx"] : GetPixelRGB(dfx, dty)
         colorTAB := (IsSet(pixelCache) && pixelCache.Has("tab")) ? pixelCache["tab"] : GetPixelRGB(tabx, taby)
-        
+
         dfxHSV := RGBToHSV(colorDFX.r, colorDFX.g, colorDFX.b)
         tabHSV := RGBToHSV(colorTAB.r, colorTAB.g, colorTAB.b)
-        
+
         ; 蓝色检测
         isBlueDFX := (dfxHSV.h >= 180 && dfxHSV.h <= 270 && dfxHSV.s > 0.3 && dfxHSV.v > 0.2)
-        
+
         ; 红色检测
         isRedTAB := ((tabHSV.h <= 30 || tabHSV.h >= 330) && tabHSV.s > 0.7 && tabHSV.v > 0.3)
-        
+
         return {
             dfxcolor: colorDFX,
             tabcolor: colorTAB,
@@ -1254,22 +1255,22 @@ CheckKeyPoints(res, pixelCache := unset) {
  */
 CheckPauseByEnter(res := unset, pixelCache := unset) {
     if !IsSet(res)
-        res := GetWindowResolutionAndScale()
-    
+        res := GetWindowInfo()
+
     ; 直接计算最终坐标
-    grayColor := (IsSet(pixelCache) && pixelCache.Has("enterGray")) 
-        ? pixelCache["enterGray"] 
+    grayColor := (IsSet(pixelCache) && pixelCache.Has("enterGray"))
+        ? pixelCache["enterGray"]
         : GetPixelRGB(
             Round(res["CD4W"] + (150 - res["D44KWC"]) * res["D4SW"]),
             Round(res["CD4H"] + (2070 - res["D44KHC"]) * res["D4SH"])
         )
-    
+
     loop 6 {
         x := Round(res["CD4W"] + (50 - res["D44KWC"] + 90 * (A_Index - 1)) * res["D4SW"])
-        colorObj := (IsSet(pixelCache) && pixelCache.Has("enter" A_Index)) 
-            ? pixelCache["enter" A_Index] 
+        colorObj := (IsSet(pixelCache) && pixelCache.Has("enter" A_Index))
+            ? pixelCache["enter" A_Index]
             : GetPixelRGB(x, Round(res["CD4H"] + (1440 - res["D44KHC"]) * res["D4SH"]))
-        
+
         hsv := RGBToHSV(colorObj.r, colorObj.g, colorObj.b)
 
         isRedHue := (hsv.h <= 30 || hsv.h >= 330)  ; 红色色相范围
@@ -1279,9 +1280,9 @@ CheckPauseByEnter(res := unset, pixelCache := unset) {
         if (isRedHue && isSaturated && isBright) {
 
             grayHsv := RGBToHSV(grayColor.r, grayColor.g, grayColor.b)
-            
+
             isGrayBackground := (grayHsv.s < 0.3 && grayHsv.v < 0.3)
-            
+
             return isGrayBackground
         }
     }
@@ -1291,41 +1292,40 @@ CheckPauseByEnter(res := unset, pixelCache := unset) {
 /**
  * 血条检测函数
  * @param res {Map} 窗口分辨率信息(可选)
- * @param pixelCache {Map} 像素缓存(可选)
  * @returns {Boolean} 是否检测到血条
  */
 CheckPauseByBlood(res := unset, pixelCache := unset) {
     if !IsSet(res)
-        res := GetWindowResolutionAndScale()
+        res := GetWindowInfo()
     
+    ; 定义血条检测坐标（怪物和Boss血条位置）
+    bloodCoords := [
+        {x: 1605, y: 85},   ; 怪物血条上边缘
+        {x: 1605, y: 95},   ; 怪物血条下边缘
+        {x: 1435, y: 85},   ; Boss血条上边缘
+        {x: 1435, y: 95}    ; Boss血条下边缘
+    ]
+
     try {
+        ; 一次性获取所有血条坐标的颜色
+        ; 检测血条红色像素
         hitCount := 0
-        loop 2 {
-            x := Round(res["CD4W"] + ([1605, 1435][A_Index] - res["D44KWC"]) * res["D4SW"])
-            loop 2 {
-                y := Round(res["CD4H"] + ([85, 95][A_Index] - res["D44KHC"]) * res["D4SH"])
-                key := "blood" ((A_Index - 1) * 2 + A_Index)
-                color := (IsSet(pixelCache) && pixelCache.Has(key)) ? pixelCache[key] : GetPixelRGB(x, y)
-                
-                hsv := RGBToHSV(color.r, color.g, color.b)
-
-                isRedHue := (hsv.h <= 30 || hsv.h >= 330)  ; 红色色相范围
-                isSaturated := (hsv.s > 0.7)               ; 饱和度大于70%
-                isBright := (hsv.v > 0.4)  ; 亮度大于40%
-
-                if (isRedHue && isSaturated && isBright) {
-                    hitCount++
-                    if (hitCount >= 2)
-                        return true
-                }
+        bloodColors := []
+        for i, coord in bloodCoords {
+            x := Round(res["CD4W"] + (coord.x - res["D44KWC"]) * res["D4SW"])
+            y := Round(res["CD4H"] + (coord.y - res["D44KHC"]) * res["D4SH"])
+            key := x . "," . y  ; 使用坐标组合作为缓存键
+            bloodColors := (IsSet(pixelCache) && pixelCache.Has(key)) ? pixelCache[key] : GetPixelRGB(x, y)
+            if (bloodColors.r > (bloodColors.g + bloodColors.b) * 2 && bloodColors.r > 100) {
+                hitCount++
+                return true
             }
         }
         return false
-    } catch {
+    } catch as err {
         return false
     }
 }
-
 /**
  * 定时检测血条并自动暂停/启动宏
  */
@@ -1335,14 +1335,14 @@ AutoPauseByBlood() {
     static resumeHitCount := 0
 
     ; 读取多次确认次数（带默认值和容错）
-    PAUSE_CONFIRM := uCtrl["ipPause"].Has("pauseConfirm") ? Max(1, Min(9, Integer(uCtrl["ipPause"]["pauseConfirm"].Value))) : 5
-    RESUME_CONFIRM := uCtrl["ipPause"].Has("resumeConfirm") ? Max(1, Min(9, Integer(uCtrl["ipPause"]["resumeConfirm"].Value))) : 2
+    PAUSE := uCtrl["ipPause"]["pauseConfirm"].Value
+    RESUME := uCtrl["ipPause"]["resumeConfirm"].Value
 
     if (!isRunning || uCtrl["ipPause"]["enable"].Value != 1)
         return
 
-    ; 复用CheckPauseByBlood函数进行检测
-    res := GetWindowResolutionAndScale()
+    ; 像素缓存进行血条检测
+    res := GetWindowInfo()
     pixelCache := Map()
     bloodDetected := CheckPauseByBlood(res, pixelCache)
 
@@ -1350,7 +1350,7 @@ AutoPauseByBlood() {
         if (bloodDetected) {
             resumeHitCount++
             pauseMissCount := 0
-            if (resumeHitCount >= RESUME_CONFIRM) {
+            if (resumeHitCount >= RESUME) {
                 TogglePause("blood", false)
                 UpdateStatus("运行中", "检测到血条，自动启动")
                 resumeHitCount := 0
@@ -1362,7 +1362,7 @@ AutoPauseByBlood() {
         if (!bloodDetected) {
             pauseMissCount++
             resumeHitCount := 0
-            if (pauseMissCount >= PAUSE_CONFIRM) {
+            if (pauseMissCount >= PAUSE) {
                 TogglePause("blood", true)
                 UpdateStatus("已暂停", "血条消失，自动暂停")
                 pauseMissCount := 0
@@ -1383,15 +1383,17 @@ AutoPauseByTAB() {
     static resumeHitCount := 0
 
     ; 读取多次确认次数（带默认值和容错）
-    PAUSE_CONFIRM := uCtrl["tabPause"].Has("pauseConfirm") ? Max(1, Min(9, Integer(uCtrl["tabPause"]["pauseConfirm"].Value))) : 2
-    RESUME_CONFIRM := uCtrl["tabPause"].Has("resumeConfirm") ? Max(1, Min(9, Integer(uCtrl["tabPause"]["resumeConfirm"].Value))) : 2
+    PAUSE_CONFIRM := uCtrl["tabPause"].Has("pauseConfirm") ? Max(1, Min(9, Integer(uCtrl["tabPause"]["pauseConfirm"].Value
+    ))) : 2
+    RESUME_CONFIRM := uCtrl["tabPause"].Has("resumeConfirm") ? Max(1, Min(9, Integer(uCtrl["tabPause"]["resumeConfirm"]
+        .Value))) : 2
 
     ; 如果宏未运行或界面检测未启用，则直接返回
     if (!isRunning || uCtrl["tabPause"]["enable"].Value != 1)
         return
 
     try {
-        res := GetWindowResolutionAndScale()
+        res := GetWindowInfo()
         pixelCache := Map()
         keyPoints := CheckKeyPoints(res, pixelCache)
 
@@ -1468,16 +1470,16 @@ IsSkillActive(x, y) {
  */
 IsResourceSufficient() {
     global uCtrl
-    res := GetWindowResolutionAndScale()
+    res := GetWindowInfo()
     x := Round(res["CD4W"] + (2620 - res["D44KWC"]) * res["D4SW"])
     y := Round(res["CD4H"] + (1875 - res["D44KHC"]) * res["D4SH"])
 
     loop 5 {
         try {
             color := GetPixelRGBNoCache(x, y + (A_Index - 1))
-            
+
             hsv := RGBToHSV(color.r, color.g, color.b)
-            
+
             if (hsv.s > 0.30 && hsv.v > 0.15)
                 return true
         } catch {
@@ -1561,20 +1563,20 @@ GetPixelRGB(x, y, useCache := true) {
 RGBToHSV(r, g, b) {
     ; 转换为0-1范围
     r := r / 255.0
-    g := g / 255.0  
+    g := g / 255.0
     b := b / 255.0
-    
+
     ; 找到最大最小值
     max_val := Max(r, g, b)
     min_val := Min(r, g, b)
     diff := max_val - min_val
-    
+
     ; 计算亮度(Value)
     v := max_val
-    
+
     ; 计算饱和度(Saturation)
     s := (max_val == 0) ? 0 : (diff / max_val)
-    
+
     ; 计算色相(Hue)
     h := 0
     if (diff != 0) {
@@ -1586,8 +1588,8 @@ RGBToHSV(r, g, b) {
             h := 60 * ((r - g) / diff + 4)
         }
     }
-    
-    return {h: h, s: s, v: v}
+
+    return { h: h, s: s, v: v }
 }
 
 /**
