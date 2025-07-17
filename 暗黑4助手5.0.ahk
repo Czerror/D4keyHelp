@@ -954,54 +954,69 @@ GetPriorityFromMode(mode) {
  * @description 处理队列中的按键事件
  */
 KeyQueueWorker() {
-    global keyQueue, keyQueueLastExec
+    global keyQueue, keyQueueLastExec, isRunning
+
+    ; 快速安全检查 - 如果宏未运行或暂停中，则立即返回
+    if (!isRunning || IsAnyPaused())
+        return
 
     ; 快速初始化检查
-    if !IsObject(keyQueue)
-        keyQueue := []
-    if !IsObject(keyQueueLastExec)
+    if (!IsObject(keyQueue) || keyQueue.Length < 1) {
+        return
+    }
+    
+    if (!IsObject(keyQueueLastExec))
         keyQueueLastExec := Map()
 
     static critSection := 0
     now := A_TickCount
-    pendingItems := []
-    remainingItems := []
-
+    
     ; 轻量级临界区 (无超时设置)
     if (critSection)
         return
+        
     critSection := 1
+    
+    try {
+        pendingItems := []
+        remainingItems := []
 
-    ; 快速队列处理
-    loop keyQueue.Length {
-        item := keyQueue[A_Index]
-        uniqueId := item.type ":" (item.type = "mouse" ? item.mouseBtn : item.keyOrBtn)
-        lastExec := keyQueueLastExec.Get(uniqueId, 0)
+        ; 安全检查 keyQueue 数组长度
+        if (keyQueue.Length > 0) {
+            ; 使用 for 循环替代 loop 以避免索引问题
+            for item in keyQueue {
+                uniqueId := item.type ":" (item.type = "mouse" ? item.mouseBtn : item.keyOrBtn)
+                lastExec := keyQueueLastExec.Get(uniqueId, 0)
 
-        ; 优化时间差计算
-        if ((now - lastExec) >= item.interval) {
-            HandleKeyMode(item.keyOrBtn, item.mode, item.pos, item.type, item.mouseBtn)
-            keyQueueLastExec[uniqueId] := now
-            pendingItems.Push(item)
-        } else {
-            remainingItems.Push(item)
+                ; 优化时间差计算
+                if ((now - lastExec) >= item.interval) {
+                    HandleKeyMode(item.keyOrBtn, item.mode, item.pos, item.type, item.mouseBtn)
+                    keyQueueLastExec[uniqueId] := now
+                    pendingItems.Push(item)
+                } else {
+                    remainingItems.Push(item)
+                }
+            }
+
+            ; 原子化队列更新
+            keyQueue := remainingItems
         }
-    }
-
-    ; 原子化队列更新
-    keyQueue := remainingItems
-    critSection := 0
-
-    ; 高效重新入队
-    for item in pendingItems {
-        EnqueueKey(
-            item.keyOrBtn,
-            item.mode,
-            item.pos,
-            item.type,
-            item.mouseBtn,
-            item.interval
-        )
+        
+        ; 高效重新入队
+        for item in pendingItems {
+            EnqueueKey(
+                item.keyOrBtn,
+                item.mode,
+                item.pos,
+                item.type,
+                item.mouseBtn,
+                item.interval
+            )
+        }
+    } catch as err {
+    } finally {
+        ; 确保临界区标志被重置
+        critSection := 0
     }
 }
 
