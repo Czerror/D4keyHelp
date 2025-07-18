@@ -435,58 +435,40 @@ TogglePause(reason, state) {
  * 启动定时器
  */
 StartAllTimers() {
-    global cSkill, mSkill, uCtrl, RunMod
+    global cSkill, mSkill, uCtrl, skillTimers, RunMod, keyQueue, keyQueueLastExec
+
+    if (!IsSet(skillTimers))
+        skillTimers := Map()
 
     if (uCtrl["D4only"]["enable"].Value == 1) {
         CoordManager()
         StartAutoMove()
     }
-
-    if (RunMod.Value = 1) {
-        ; ===== 技能按键 =====
-        loop 5 {
-            if (cSkill[A_Index]["enable"].Value) {
-                PressKeyCallback("skill", A_Index)
-            }
+    
+    ; ===== 技能按键 =====
+    loop 5 {
+        if (cSkill[A_Index]["enable"].Value) {
+            PressKeyCallback("skill", A_Index)
         }
+    }
 
-        ; ===== 鼠标按键 =====
-        for mouseBtn in ["left", "right"] {
-            if (mSkill[mouseBtn]["enable"].Value) {
-                PressKeyCallback("mouse", mouseBtn)
-            }
+    ; ===== 鼠标按键 =====
+    for mouseBtn in ["left", "right"] {
+         if (mSkill[mouseBtn]["enable"].Value) {
+            PressKeyCallback("mouse", mouseBtn)
         }
+    }
 
-        ; ===== 功能键 =====
-        for uSkillId in ["dodge", "potion", "forceMove"] {
-            if (uCtrl[uSkillId]["enable"].Value) {
-                PressKeyCallback("uSkill", uSkillId)
-            }
+    ; ===== 功能键 =====
+    for uSkillId in ["dodge", "potion", "forceMove"] {
+        if (uCtrl[uSkillId]["enable"].Value) {
+            PressKeyCallback("uSkill", uSkillId)
         }
-    } else if (RunMod.Value = 2) {
+    }
+
+    if (RunMod.Value = 2) {
         keyQueue := []
         keyQueueLastExec := Map()
-        ; ===== 技能按键 =====
-        loop 5 {
-            if (cSkill[A_Index]["enable"].Value) {
-                PressKeyCallback("skill", A_Index)
-            }
-        }
-
-        ; ===== 鼠标按键 =====
-        for mouseBtn in ["left", "right"] {
-            if (mSkill[mouseBtn]["enable"].Value) {
-                PressKeyCallback("mouse", mouseBtn)
-            }
-        }
-
-        ; ===== 功能键 =====
-        for uSkillId in ["dodge", "potion", "forceMove"] {
-            if (uCtrl[uSkillId]["enable"].Value) {
-                PressKeyCallback("uSkill", uSkillId)
-            }
-        }
-
         SetTimer(KeyQueueWorker, 5)
     }
 }
@@ -507,20 +489,15 @@ StopAllTimers() {
 
     ; 处理单线程模式的队列定时器
     if (RunMod.Value = 2) {
-
         SetTimer(KeyQueueWorker, 0)
-        
         ReleaseAllKeys()
-        
         keyQueue := []
-
         keyQueueLastExec := Map()
     }
 
     ; 停止可能的自动移动定时器
     SetTimer(MoveMouseToNextPoint, 0)
-    ; 清空映射
-    skillTimers := Map()
+
     ; 释放所有按键
     ReleaseAllKeys()
 }
@@ -1291,8 +1268,7 @@ CheckKeyPoints(allcoords, pixelCache := unset) {
         ; 红色检测
         isRedTAB := false
         try {
-            tabHSV := RGBToHSV(colorTAB.r, colorTAB.g, colorTAB.b)
-            isRedTAB := ((tabHSV.h <= 30 || tabHSV.h >= 330) && tabHSV.s > 0.7 && tabHSV.v > 0.3)
+            isRedTAB := (colorTAB.r > (colorTAB.g + colorTAB.b) * 1.5)
         } catch {
             isRedTAB := false
         }
@@ -1634,19 +1610,13 @@ IsSkillActive(skillIndex) {
 IsResourceSufficient() {
     global allcoords
     
-    ; 确保坐标已初始化
-    if (!allcoords.Has("resource_bar")) {
-        CoordManager()
-    }
-    
     coord := allcoords["resource_bar"]
 
     loop 5 {
         try {
             color := GetPixelRGBNoCache(coord.x, coord.y + (A_Index - 1))
-            hsv := RGBToHSV(color.r, color.g, color.b)
-
-            if (hsv.s > 0.30 && hsv.v > 0.15)
+            Colorrange := Max(color.r, color.g, color.b) - Min(color.r, color.g, color.b)
+            if (Colorrange < 30)
                 return true
         } catch {
             Sleep 5
