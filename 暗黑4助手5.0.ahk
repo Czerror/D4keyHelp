@@ -15,27 +15,7 @@ global isPaused := Map(
 )
 
 global currentHotkey := "F1"       ; 当前热键
-global hotkeyControl := ""         ; 热键控件
-; GUI相关变量
-global myGui := ""                 ; 主GUI对象
-global statusText := ""            ; 状态文本控件
-global statusBar := ""             ; 状态栏控件
-global currentProfileName := "默认" ; 当前配置名称
-global profileList := []           ; 配置列表
-
-; 控件映射
-global cSkill := Map()      ; 技能控件映射
-global bSkill := Map()      ; 技能BUFF控件映射
-global mSkill := Map()      ; 鼠标控件
-global uCtrl := Map()       ; 功能键控件
-
-; 技能模式常量
-global skillMod := ["连点", "BUFF", "按住", "资源"]
-global skillTimers := Map()   ; 用于存储各个技能的定时器ID
-; 定时器相关变量
-global holdStates := Map()         ; 跟踪按键按住状态
-global keyQueue := []              ; 队列模式的操作队列
-global keyQueueLastExec := Map()   ; 队列模式下每个操作的上次执行时间
+global ProfileName := "默认" ; 当前配置名称
 ; ==================== 工具类函数 ====================
 /**
  * 调试日志记录函数
@@ -110,7 +90,7 @@ InitializeGUI() {
 ;| 功能: 创建主程序界面及所有控件
 ;|===============================================================|
 CreateMainGUI() {
-    global myGui, statusText, hotkeyControl, currentProfileName, RunMod
+    global myGui, statusText, hotkeyControl, ProfileName, RunMod
     global profileDropDown, profileNameInput
 
     ;# ==================== 主控制区域 ==================== #
@@ -119,7 +99,6 @@ CreateMainGUI() {
     myGui.AddButton("x30 y65 w80 h30", "开始/停止").OnEvent("Click", ToggleMacro)
     hotkeyControl := myGui.AddHotkey("x120 y70 w80 h20", currentHotkey)
     hotkeyControl.OnEvent("Change", (ctrl, *) => LoadGlobalHotkey())
-    myGui.AddText("x30 y100 w240 h20", "提示：仅在暗黑破坏神4窗口活动时生效")
 
     ;# ==================== 运行模式选择 ==================== #
     RunMod := myGui.AddDropDownList("x90 y8 w65 h60 Choose1", ["多线程", "单线程"])
@@ -134,7 +113,7 @@ CreateMainGUI() {
     myGui.AddGroupBox("x300 y10 w170 h120", "配置方案")
     profileDropDown := myGui.AddDropDownList("x320 y35 w60 h120 Choose1", ["默认"])
     profileDropDown.OnEvent("Change", LoadSelectedProfile)
-    profileNameInput := myGui.AddEdit("x390 y35 w50 h20", currentProfileName)
+    profileNameInput := myGui.AddEdit("x390 y35 w50 h20", ProfileName)
     myGui.AddButton("x320 y75 w40 h25", "保存").OnEvent("Click", SaveProfile)
     myGui.AddButton("x370 y75 w40 h25", "删除").OnEvent("Click", DeleteProfile)
 
@@ -157,6 +136,7 @@ CreateAllControls() {
     cSkill := Map()
     mSkill := Map()
     uCtrl := Map()
+    skillMod := ["连点", "BUFF", "按住", "资源"]
 
     ;|----------------------- 技能配置 -----------------------|
     loop 5 {
@@ -243,6 +223,11 @@ CreateAllControls() {
     uCtrl["ranDom"]["max"].OnEvent("LoseFocus", (*) => (
         uCtrl["ranDom"]["max"].Value := Max(1, uCtrl["ranDom"]["max"].Value)))
 
+    uCtrl["D4only"] := Map(  ; D4only
+        "text", myGui.AddText("x30 y100 w240 h20", "仅在暗黑破坏神4窗口活动时生效:"),
+        "enable", myGui.AddCheckbox("x230 y100 w15 h15", "1")
+    )
+
     ;|---------------------- 血条检测 ------------------------|
     uCtrl["ipPause"] := Map(
         "text", myGui.AddText("x30 y155 w60 h20", "血条检测:"),
@@ -250,7 +235,7 @@ CreateAllControls() {
         "startText", myGui.AddText("x120 y185 w15 h20", "启"),
         "enable", myGui.AddCheckbox("x90 y155 w20 h20"),
         "interval", myGui.AddEdit("x115 y155 w40 h20", "50"),
-        "pauseConfirm", myGui.AddEdit("x95 y183 w20 h20", "5"),
+        "pauseConfirm", myGui.AddEdit("x95 y183 w20 h20", "2"),
         "resumeConfirm", myGui.AddEdit("x135 y183 w20 h20", "2")
     )
     ; 输入验证
@@ -328,40 +313,39 @@ UpdateStatus(status, barText) {
 ToggleMacro(*) {
     global isRunning, isPaused
 
-    ; 确保完全停止所有定时器
     StopAllTimers()
     ManageTimers("none", false)
 
-    ; 切换运行状态
     isRunning := !isRunning
 
     if isRunning {
-        ; 初始化暂停状态
         for key, _ in isPaused {
             isPaused[key] := false
         }
 
-        ; 启动监控定时器
-        ManageTimers("all", true)
+        if (uCtrl["D4only"]["enable"].Value == 1) {
 
-        if WinActive("ahk_class Diablo IV Main Window Class") {
+            if WinActive("ahk_class Diablo IV Main Window Class") {
+                StartAllTimers()
+                ManageTimers("all", true)
+                UpdateStatus("运行中", "宏已启动")
+            } else {
+                StartAllTimers()
+                ManageTimers("all", true)
+                isPaused["window"] := true
+                UpdateStatus("已暂停(窗口切换)", "宏已暂停 - 窗口未激活")
+            }
+        } else {
             StartAllTimers()
             UpdateStatus("运行中", "宏已启动")
-        } else {
-            isPaused["window"] := true
-            UpdateStatus("已暂停(窗口切换)", "宏已暂停 - 窗口未激活")
         }
     } else {
-        ; 停止所有定时器
         StopAllTimers()
         ManageTimers("none", false)
-
-        ; 重置所有暂停状态
         for key, _ in isPaused {
             isPaused[key] := false
         }
 
-        ; 确保释放所有按键
         ReleaseAllKeys()
 
         UpdateStatus("已停止", "宏已停止")
@@ -373,6 +357,10 @@ ToggleMacro(*) {
  */
 ReleaseAllKeys() {
     global holdStates, uCtrl
+
+    ; 自动创建 holdStates
+    if (!IsSet(holdStates))
+        holdStates := Map()
 
     ; 释放所有跟踪的按键
     for uniqueKey, _ in holdStates {
@@ -422,35 +410,13 @@ IsAnyPaused() {
  * 切换暂停状态
  */
 TogglePause(reason, state) {
-    global isPaused, isRunning
-    if (!isRunning)
-        return
+    global isPaused
     if (!isPaused.Has(reason)) {
         isPaused[reason] := false
     }
-
-    ; 恢复时只检测对应原因的条件
-    if !state {
-        res := GetWindowInfo()
-        pixelCache := Map()
-        if (reason = "window") {
-            if !WinActive("ahk_class Diablo IV Main Window Class")
-                return
-        } else if (reason = "tab") {
-            colors := CheckKeyPoints(res, pixelCache)
-            if (colors.isRedColor)
-                return
-        } else if (reason = "enter") {
-            if (CheckPauseByEnter(res, pixelCache))
-                return
-        } else if (reason = "blood") {
-            if (!CheckPauseByBlood(res, pixelCache))
-                return
-        } else if (reason = "doubleClick") {
-            ; 双击暂停一般定时恢复，这里不做额外判断
-        }
+    if (isPaused[reason] == state) {
+        return
     }
-
     prev := IsAnyPaused()
     isPaused[reason] := state
     now := IsAnyPaused()
@@ -469,11 +435,12 @@ TogglePause(reason, state) {
  * 启动定时器
  */
 StartAllTimers() {
-    global cSkill, mSkill, uCtrl, skillTimers, RunMod
+    global cSkill, mSkill, uCtrl, RunMod
 
-    ; 清空之前的定时器
-    StopAllTimers()
-    GetDynamicbSkill()
+    if (uCtrl["D4only"]["enable"].Value == 1) {
+        CoordManager()
+        StartAutoMove()
+    }
 
     if (RunMod.Value = 1) {
         ; ===== 技能按键 =====
@@ -522,15 +489,16 @@ StartAllTimers() {
 
         SetTimer(KeyQueueWorker, 5)
     }
-    StartAutoMove()
 }
 
 /**
  * 停止所有定时器
  */
 StopAllTimers() {
-    global skillTimers, RunMod, keyQueue, keyQueueLastExec, bSkill
+    global skillTimers, RunMod, keyQueue, keyQueueLastExec
 
+    if (!IsSet(skillTimers))
+        skillTimers := Map()
     ; 停止所有技能定时器
     for timerName, boundFunc in skillTimers.Clone() {
         SetTimer(boundFunc, 0)
@@ -538,22 +506,25 @@ StopAllTimers() {
     }
 
     ; 处理单线程模式的队列定时器
-    if (RunMod && RunMod.Value = 2) {
+    if (RunMod.Value = 2) {
+
         SetTimer(KeyQueueWorker, 0)
+        
+        ReleaseAllKeys()
+        
         keyQueue := []
+
         keyQueueLastExec := Map()
     }
 
-    ; 一次性清空映射
-    skillTimers := Map()
-    bSkill := Map()
-
     ; 停止可能的自动移动定时器
     SetTimer(MoveMouseToNextPoint, 0)
-
+    ; 清空映射
+    skillTimers := Map()
     ; 释放所有按键
     ReleaseAllKeys()
 }
+
 /**
  * 管理全局定时器
  * @param {String} timerType - 定时器类型
@@ -592,15 +563,22 @@ ManageTimers(timerType, enable, interval := unset) {
         SetTimer(AutoPauseByTAB, enable ? actualInterval : 0)
     }
     else if (timerType = "all") {
-        ; 分别读取各自的 interval 控件值，保证每个检测项独立
         windowInterval := DEFAULT_INTERVALS["window"]
         bloodInterval := (uCtrl.Has("ipPause") && uCtrl["ipPause"].Has("interval"))
             ? Integer(uCtrl["ipPause"]["interval"].Value) : DEFAULT_INTERVALS["blood"]
         tabInterval := (uCtrl.Has("tabPause") && uCtrl["tabPause"].Has("interval"))
             ? Integer(uCtrl["tabPause"]["interval"].Value) : DEFAULT_INTERVALS["tab"]
-        ManageTimers("window", enable, windowInterval)
-        ManageTimers("blood", enable, bloodInterval)
-        ManageTimers("tab", enable, tabInterval)
+        if (uCtrl["D4only"]["enable"].Value) {
+            ManageTimers("window", enable, windowInterval)
+        }
+
+        if (uCtrl["ipPause"]["enable"].Value) {
+            ManageTimers("blood", enable, bloodInterval)
+        }
+
+        if (uCtrl["tabPause"]["enable"].Value) {
+            ManageTimers("tab", enable, tabInterval)
+        }
     }
     else if (timerType = "none") {
         SetTimer(CheckWindow, 0)
@@ -619,10 +597,10 @@ ManageTimers(timerType, enable, interval := unset) {
  * @param {*} - 事件参数（来自按钮点击事件）
  */
 RefreshDetection(*) {
-    global isRunning, statusBar, uCtrl, isPaused
+    global  statusBar, uCtrl, isPaused
 
-    if (!isRunning) {
-        statusBar.Text := "宏未运行，无需刷新检测"
+    if (uCtrl["D4only"]["enable"].Value != 1) {
+        statusBar.Text := "无需刷新检测"
         return
     }
 
@@ -657,10 +635,18 @@ RefreshDetection(*) {
     }
 
     ; 重新启动定时器
-    ManageTimers("window", true, 100)
-    ManageTimers("blood", true, bloodInterval)
-    ManageTimers("tab", true, tabInterval)
 
+    if (uCtrl["D4only"]["enable"].Value) {
+        ManageTimers("window", true, 100)
+    }
+
+    if (uCtrl["ipPause"]["enable"].Value) {
+        ManageTimers("blood", true, bloodInterval)
+    }
+    
+    if (uCtrl["tabPause"]["enable"].Value) {
+        ManageTimers("tab", true, tabInterval)
+    }
     ; 获取更新后的状态
     paused := IsAnyPaused()
     statusBar.Text := "已刷新所有检测定时器" (paused ? " (宏仍在暂停状态)" : "")
@@ -684,8 +670,7 @@ CleanPixelCache() {
  * @returns {Integer} - 模式枚举值
  */
 StartAutoMove() {
-    global uCtrl, isRunning
-
+    global uCtrl
     ; 检查鼠标自动移动是否启用
     if (uCtrl["mouseAutoMove"]["enable"].Value) {
         interval := Integer(uCtrl["mouseAutoMove"]["interval"].Value)
@@ -708,7 +693,7 @@ StartAutoMove() {
  * @param {String} type - - 输入类型 ("key"|"mouse"|"uSkill")
  * @param {String} mouseBtn - 鼠标按钮名（"left"/"right"）
  */
-HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
+HandleKeyMode(keyOrBtn, mode, skillIndex := "", type := "key", mouseBtn := "") {
     global uCtrl, holdStates
     static lastReholdTime := Map()
     static REHOLD_MIN_INTERVAL := 2000
@@ -730,7 +715,7 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
     ; 模式处理
     switch mode {
         case 2: ; BUFF模式
-            if (pos && IsSkillActive(pos.x, pos.y))
+            if (skillIndex && IsSkillActive(skillIndex))
                 return
 
             if (isMouse) {
@@ -844,30 +829,38 @@ HandleKeyMode(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "") {
 /**
  * 键位入队函数
  */
-EnqueueKey(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", interval := 1000) {
+EnqueueKey(keyOrBtn, mode, skillIndex := "", type := "key", mouseBtn := "", interval := 1000) {
     global keyQueue
     static maxLen := 20
+    static keyIndexMap := Map()
 
     ; 快速生成唯一ID
     uniqueId := type ":" (type = "mouse" ? mouseBtn : keyOrBtn)
     priority := GetPriorityFromMode(mode)
     now := A_TickCount
 
-    ; 快速查找现有项
-    existingIndex := 0
-    loop keyQueue.Length {
-        if (keyQueue[A_Index].type ":"
-            (keyQueue[A_Index].type = "mouse" ? keyQueue[A_Index].mouseBtn : keyQueue[A_Index].keyOrBtn) = uniqueId) {
-            existingIndex := A_Index
-            break
+    existingIndex := keyIndexMap.Get(uniqueId, 0)
+    if (existingIndex > 0 && existingIndex <= keyQueue.Length) {
+        if (keyQueue[existingIndex].type ":" 
+            (keyQueue[existingIndex].type = "mouse" ? keyQueue[existingIndex].mouseBtn : keyQueue[existingIndex].keyOrBtn) = uniqueId) {
+        } else {
+            existingIndex := 0
+            for i, qItem in keyQueue {
+                if (qItem.type ":" (qItem.type = "mouse" ? qItem.mouseBtn : qItem.keyOrBtn) = uniqueId) {
+                    existingIndex := i
+                    break
+                }
+            }
         }
+    } else {
+        existingIndex := 0
     }
 
     ; 创建新项
     item := {
         keyOrBtn: keyOrBtn,
         mode: mode,
-        pos: pos,
+        skillIndex: skillIndex,
         type: type,
         mouseBtn: mouseBtn,
         time: now,
@@ -876,8 +869,15 @@ EnqueueKey(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", interval :=
     }
 
     ; 移除现有项
-    if (existingIndex > 0)
+    if (existingIndex > 0) {
         keyQueue.RemoveAt(existingIndex)
+        keyIndexMap.Delete(uniqueId)
+        for id, idx in keyIndexMap {
+            if (idx > existingIndex) {
+                keyIndexMap[id] := idx - 1
+            }
+        }
+    }
 
     ; 队列满处理
     if (keyQueue.Length >= maxLen) {
@@ -895,47 +895,66 @@ EnqueueKey(keyOrBtn, mode, pos := "", type := "key", mouseBtn := "", interval :=
             }
         }
 
-        if (lowestIndex > 0 && priority >= lowestPriority)
+        if (lowestIndex > 0 && priority >= lowestPriority) {
+            removedItem := keyQueue[lowestIndex]
+            removedId := removedItem.type ":" (removedItem.type = "mouse" ? removedItem.mouseBtn : removedItem.keyOrBtn)
+            keyIndexMap.Delete(removedId)
+            
             keyQueue.RemoveAt(lowestIndex)
-        else if (existingIndex == 0)
+
+            for id, idx in keyIndexMap {
+                if (idx > lowestIndex) {
+                    keyIndexMap[id] := idx - 1
+                }
+            }
+        } else if (existingIndex == 0) {
             return
+        }
     }
 
-    ; 快速插入处理
+    insertIndex := keyQueue.Length + 1
+
     if (keyQueue.Length == 0) {
         keyQueue.Push(item)
-        return
+        insertIndex := 1
+    } else {
+        firstPriority := keyQueue[1].priority
+        lastPriority := keyQueue[keyQueue.Length].priority
+
+        if (priority > firstPriority) {
+            keyQueue.InsertAt(1, item)
+            insertIndex := 1
+        } else if (priority <= lastPriority) {
+            keyQueue.Push(item)
+            insertIndex := keyQueue.Length
+        } else {
+            left := 1
+            right := keyQueue.Length
+
+            while (right - left > 1) {
+                mid := (left + right) >> 1
+                midItem := keyQueue[mid]
+                if (priority > midItem.priority ||
+                    (priority == midItem.priority && now > midItem.time))
+                    right := mid
+                else
+                    left := mid
+            }
+
+            keyQueue.InsertAt(right, item)
+            insertIndex := right
+        }
     }
 
-    ; 优化二分查找
-    left := 1
-    right := keyQueue.Length
-
-    ; 边界检查
-    firstPriority := keyQueue[1].priority
-    lastPriority := keyQueue[right].priority
-
-    if (priority > firstPriority) {
-        keyQueue.InsertAt(1, item)
-        return
+    keyIndexMap[uniqueId] := insertIndex
+    
+    if (insertIndex <= keyQueue.Length - 1) {
+        for id, idx in keyIndexMap {
+            if (idx >= insertIndex && id != uniqueId) {
+                keyIndexMap[id] := idx + 1
+            }
+        }
     }
-    if (priority <= lastPriority) {
-        keyQueue.Push(item)
-        return
-    }
-
-    ; 核心二分逻辑
-    while (right - left > 1) {
-        mid := (left + right) >> 1
-        midItem := keyQueue[mid]
-        if (priority > midItem.priority ||
-            (priority == midItem.priority && now > midItem.time))
-            right := mid
-        else
-            left := mid
-    }
-
-    keyQueue.InsertAt(right, item)
 }
 
 ; 优先级计算函数
@@ -954,13 +973,11 @@ GetPriorityFromMode(mode) {
  * @description 处理队列中的按键事件
  */
 KeyQueueWorker() {
-    global keyQueue, keyQueueLastExec, isRunning
+    global keyQueue, keyQueueLastExec
 
-    ; 快速安全检查 - 如果宏未运行或暂停中，则立即返回
-    if (!isRunning || IsAnyPaused())
+    if (IsAnyPaused())
         return
 
-    ; 快速初始化检查
     if (!IsObject(keyQueue) || keyQueue.Length < 1) {
         return
     }
@@ -970,8 +987,7 @@ KeyQueueWorker() {
 
     static critSection := 0
     now := A_TickCount
-    
-    ; 轻量级临界区 (无超时设置)
+
     if (critSection)
         return
         
@@ -980,17 +996,18 @@ KeyQueueWorker() {
     try {
         pendingItems := []
         remainingItems := []
+        maxProcessCount := 10
 
-        ; 安全检查 keyQueue 数组长度
         if (keyQueue.Length > 0) {
-            ; 使用 for 循环替代 loop 以避免索引问题
+            processCount := 0
             for item in keyQueue {
+                if (processCount >= maxProcessCount)
+                    break
                 uniqueId := item.type ":" (item.type = "mouse" ? item.mouseBtn : item.keyOrBtn)
                 lastExec := keyQueueLastExec.Get(uniqueId, 0)
 
-                ; 优化时间差计算
                 if ((now - lastExec) >= item.interval) {
-                    HandleKeyMode(item.keyOrBtn, item.mode, item.pos, item.type, item.mouseBtn)
+                    HandleKeyMode(item.keyOrBtn, item.mode, item.skillIndex, item.type, item.mouseBtn)
                     keyQueueLastExec[uniqueId] := now
                     pendingItems.Push(item)
                 } else {
@@ -998,24 +1015,22 @@ KeyQueueWorker() {
                 }
             }
 
-            ; 原子化队列更新
             keyQueue := remainingItems
         }
-        
-        ; 高效重新入队
-        for item in pendingItems {
-            EnqueueKey(
-                item.keyOrBtn,
-                item.mode,
-                item.pos,
-                item.type,
-                item.mouseBtn,
-                item.interval
-            )
+
+        if (pendingItems.Length > 0) {
+            for item in pendingItems {
+                EnqueueKey(
+                    item.keyOrBtn,
+                    item.mode,
+                    item.skillIndex,
+                    item.type,
+                    item.mouseBtn,
+                    item.interval
+                )
+            }
         }
-    } catch as err {
     } finally {
-        ; 确保临界区标志被重置
         critSection := 0
     }
 }
@@ -1056,7 +1071,7 @@ PressKeyCallback(category, identifier) {
 
     key := (category = "mouse") ? identifier : config["key"].Value
     mode := config.Has("mode") ? config["mode"].Value : 1
-    pos := bSkill.Has(identifier) ? bSkill[identifier] : ""
+    skillIndex := (category = "skill") ? identifier : ""
     interval := Integer(config["interval"].Value)
 
     if (uCtrl["ranDom"]["enable"].Value == 1) {
@@ -1065,60 +1080,15 @@ PressKeyCallback(category, identifier) {
 
     if (RunMod.Value == 1) {
         boundFunc := (category = "mouse")
-            ? HandleKeyMode.Bind(key, mode, pos, "mouse", identifier)
-            : HandleKeyMode.Bind(key, mode, pos, "key", "")
+            ? HandleKeyMode.Bind(key, mode, skillIndex, "mouse", identifier)
+            : HandleKeyMode.Bind(key, mode, skillIndex, "key", "")
         skillTimers[timerKey] := boundFunc
         SetTimer(boundFunc, interval)
     } else if (RunMod.Value = 2) {
         if (category = "mouse")
-            EnqueueKey(key, mode, pos, "mouse", identifier, interval)
+            EnqueueKey(key, mode, skillIndex, "mouse", identifier, interval)
         else
-            EnqueueKey(key, mode, pos, "key", "", interval)
-    }
-}
-
-/**
- * 鼠标自动移动函数
- */
-MoveMouseToNextPoint() {
-    global isRunning, uCtrl
-
-    ; 检查各种条件
-    if (!isRunning || IsAnyPaused() || !uCtrl["mouseAutoMove"]["enable"].Value)
-        return
-
-    try {
-        ; 获取分辨率和缩放比例
-        res := GetWindowInfo()
-
-        ; 计算六个点的位置
-        points := [
-        { x: Round(0.15 * res["D4W"]), y: Round(0.15 * res["D4H"]) },  ; 左上角
-        { x: Round(0.5 * res["D4W"]), y: Round(0.15 * res["D4H"]) },   ; 中上角
-        { x: Round(0.85 * res["D4W"]), y: Round(0.15 * res["D4H"]) },  ; 右上角
-        { x: Round(0.85 * res["D4W"]), y: Round(0.85 * res["D4H"]) },  ; 右下角
-        { x: Round(0.5 * res["D4W"]), y: Round(0.85 * res["D4H"]) },   ; 中下角
-        { x: Round(0.15 * res["D4W"]), y: Round(0.85 * res["D4H"]) }   ; 左下角
-        ]
-
-        ; 确保currentPoint字段存在
-        if (!uCtrl["mouseAutoMove"].Has("currentPoint"))
-            uCtrl["mouseAutoMove"]["currentPoint"] := 1
-
-        ; 获取当前点索引
-        currentIndex := uCtrl["mouseAutoMove"]["currentPoint"]
-
-        ; 验证索引范围
-        if (currentIndex < 1 || currentIndex > points.Length)
-            currentIndex := 1
-
-        ; 移动鼠标到当前点
-        currentPoint := points[currentIndex]
-        MouseMove(currentPoint.x, currentPoint.y, 0)
-
-        ; 更新到下一个点
-        uCtrl["mouseAutoMove"]["currentPoint"] := Mod(currentIndex, 6) + 1
-
+            EnqueueKey(key, mode, skillIndex, "key", "", interval)
     }
 }
 
@@ -1141,14 +1111,9 @@ CheckWindow() {
  * @param {Boolean} isActive - 暗黑4窗口是否激活
  */
 OnWindowChange(isActive) {
-    global isRunning
     if (!isActive) {
-        ; 暗黑4窗口失去激活时，推送“窗口切换”暂停
-        if (isRunning) {
-            TogglePause("window", true)
-        }
-    } else if (isRunning) {
-        ; 暗黑4窗口激活时，弹出“窗口切换”暂停
+        TogglePause("window", true)
+    } else {
         TogglePause("window", false)
     }
 }
@@ -1199,59 +1164,147 @@ GetWindowInfo(D44KW := 3840, D44KH := 2160, D44KWC := 1920, D44KHC := 1080) {
 
     return D4Windows
 }
-
 /**
- * 动态计算技能位置
- * 基于窗口分辨率和缩放比例
+ * 坐标管理函数
+ * @description 一次性获取所有坐标并转换为实际屏幕坐标
  */
-GetDynamicbSkill() {
-    global bSkill
-    res := GetWindowInfo()
+CoordManager() {
+    global allcoords, bSkill
+    
 
-    bSkill.Clear()
-    loop 6 {
-        idx := A_Index
-        bSkill[idx] := {
-            x: Round(res["CD4W"] + (1550 - res["D44KWC"] + 127 * (idx - 1)) * res["D4SW"]),
-            y: Round(res["CD4H"] + (1940 - res["D44KHC"]) * res["D4SH"])
-        }
+    windowInfo := GetWindowInfo()
+
+    allcoords := Map()
+    bSkill := Map()
+
+    ; 使用预定义的坐标配置
+    static coordConfig := Map(
+        "monster_blood_top", {x: 1605, y: 85},
+        "monster_blood_bottom", {x: 1605, y: 95},
+        "boss_blood_top", {x: 1435, y: 85},
+        "boss_blood_bottom", {x: 1435, y: 95},
+        "monster_ui_top", {x: 1590, y: 75},
+        "monster_ui_bottom", {x: 1590, y: 100},
+        "boss_ui_top", {x: 1425, y: 77},
+        "boss_ui_bottom", {x: 1425, y: 117},
+        "skill_bar_blue", {x: 1535, y: 1880},
+        "tab_interface_red", {x: 3795, y: 90},
+        "dialog_gray_bg", {x: 150, y: 2070},
+        "resource_bar", {x: 2620, y: 1875}
+    )
+
+    for name, coord in coordConfig {
+        allcoords[name] := Convert(coord, windowInfo)
     }
+
+    loop 6 {
+        allcoords["dialog_red_btn_" A_Index] := Convert({
+            x: 50 + 90 * (A_Index - 1), 
+            y: 1440
+        }, windowInfo)
+    }
+
+    loop 6 {
+        bSkill[A_Index] := Convert({
+            x: 1550 + 127 * (A_Index - 1), 
+            y: 1940
+        }, windowInfo)
+    }
+
     bSkill["left"] := bSkill[5]
     bSkill["right"] := bSkill[6]
+
+    static mouseMoveRatios := [
+        {x: 0.15, y: 0.15}, {x: 0.5, y: 0.15}, {x: 0.85, y: 0.15},
+        {x: 0.85, y: 0.85}, {x: 0.5, y: 0.85}, {x: 0.15, y: 0.85}
+    ]
+    
+    loop 6 {
+        ratio := mouseMoveRatios[A_Index]
+        allcoords["mouse_move_" A_Index] := Convert({
+            x: Round(ratio.x * windowInfo["D44KW"]), 
+            y: Round(ratio.y * windowInfo["D44KH"])
+        }, windowInfo)
+    }
+    
+    return allcoords
 }
+
+Convert(coord, windowInfo := unset) {
+    static cacheInfo := unset
+    if (!IsSet(cacheInfo)) {
+        cacheInfo := GetWindowInfo()
+    }
+    if IsSet(windowInfo) {
+        useInfo := windowInfo
+    } else {
+        useInfo := cacheInfo
+    }
+    ; 直接计算转换后的坐标
+    x := Round(useInfo["CD4W"] + (coord.x - useInfo["D44KWC"]) * useInfo["D4SW"])
+    y := Round(useInfo["CD4H"] + (coord.y - useInfo["D44KHC"]) * useInfo["D4SH"])
+
+    return { x: x, y: y }
+}
+
 
 ; ==================== 像素检测与暂停机制 ====================
 /**
  * 专用的自动暂停函数
- * 只返回必要的检测结果
  * 支持像素缓存，避免重复采样
  */
-CheckKeyPoints(res, pixelCache := unset) {
+CheckKeyPoints(allcoords, pixelCache := unset) {  
     try {
-        dfx := Round(res["CD4W"] + (1535 - res["D44KWC"]) * res["D4SW"])
-        dty := Round(res["CD4H"] + (1880 - res["D44KHC"]) * res["D4SH"])
-        tabx := Round(res["CD4W"] + (3795 - res["D44KWC"]) * res["D4SW"])
-        taby := Round(res["CD4H"] + (90 - res["D44KHC"]) * res["D4SH"])
-
-        colorDFX := (IsSet(pixelCache) && pixelCache.Has("dfx")) ? pixelCache["dfx"] : GetPixelRGB(dfx, dty)
-        colorTAB := (IsSet(pixelCache) && pixelCache.Has("tab")) ? pixelCache["tab"] : GetPixelRGB(tabx, taby)
-
-        dfxHSV := RGBToHSV(colorDFX.r, colorDFX.g, colorDFX.b)
-        tabHSV := RGBToHSV(colorTAB.r, colorTAB.g, colorTAB.b)
-
+        dfx := allcoords["skill_bar_blue"].x
+        dty := allcoords["skill_bar_blue"].y
+        
+        ; 1. 检测巅峰栏蓝色
+        colorDFX := (IsSet(pixelCache) && pixelCache.Has("dfx")) ? 
+            pixelCache["dfx"] : GetPixelRGB(dfx, dty)
+        
         ; 蓝色检测
-        isBlueDFX := (dfxHSV.h >= 180 && dfxHSV.h <= 270 && dfxHSV.s > 0.3 && dfxHSV.v > 0.2)
-
+        try {
+            dfxHSV := RGBToHSV(colorDFX.r, colorDFX.g, colorDFX.b)
+            isBlueDFX := (dfxHSV.h >= 180 && dfxHSV.h <= 270 && dfxHSV.s > 0.3 && dfxHSV.v > 0.2)
+            
+            ; 如果检测到蓝色，直接返回（界面正常）
+            if (isBlueDFX) {
+                return {
+                    dfxcolor: colorDFX,
+                    tabcolor: {},
+                    isBlueColor: true,
+                    isRedColor: false,
+                    positions: { dfx: dfx, dty: dty, tabx: 0, taby: 0 }
+                }
+            }
+        } catch {
+            ; 蓝色检测失败，继续检测红色
+        }
+        
+        ; 2. 检测TAB界面红色
+        tabx := allcoords["tab_interface_red"].x
+        taby := allcoords["tab_interface_red"].y
+        
+        colorTAB := (IsSet(pixelCache) && pixelCache.Has("tab")) ? 
+            pixelCache["tab"] : GetPixelRGB(tabx, taby)
+        
         ; 红色检测
-        isRedTAB := ((tabHSV.h <= 30 || tabHSV.h >= 330) && tabHSV.s > 0.7 && tabHSV.v > 0.3)
+        isRedTAB := false
+        try {
+            tabHSV := RGBToHSV(colorTAB.r, colorTAB.g, colorTAB.b)
+            isRedTAB := ((tabHSV.h <= 30 || tabHSV.h >= 330) && tabHSV.s > 0.7 && tabHSV.v > 0.3)
+        } catch {
+            isRedTAB := false
+        }
 
         return {
             dfxcolor: colorDFX,
             tabcolor: colorTAB,
-            isBlueColor: isBlueDFX,
+            isBlueColor: false,
             isRedColor: isRedTAB,
             positions: { dfx: dfx, dty: dty, tabx: tabx, taby: taby }
         }
+        
     } catch {
         return {
             dfxcolor: {},
@@ -1268,98 +1321,190 @@ CheckKeyPoints(res, pixelCache := unset) {
  * 支持像素缓存，减少采样次数
  * @returns {Boolean} - 是否检测到红色提示
  */
-CheckPauseByEnter(res := unset, pixelCache := unset) {
-    if !IsSet(res)
-        res := GetWindowInfo()
-
-    ; 直接计算最终坐标
-    grayColor := (IsSet(pixelCache) && pixelCache.Has("enterGray"))
-        ? pixelCache["enterGray"]
-        : GetPixelRGB(
-            Round(res["CD4W"] + (150 - res["D44KWC"]) * res["D4SW"]),
-            Round(res["CD4H"] + (2070 - res["D44KHC"]) * res["D4SH"])
-        )
-
-    loop 6 {
-        x := Round(res["CD4W"] + (50 - res["D44KWC"] + 90 * (A_Index - 1)) * res["D4SW"])
-        colorObj := (IsSet(pixelCache) && pixelCache.Has("enter" A_Index))
-            ? pixelCache["enter" A_Index]
-            : GetPixelRGB(x, Round(res["CD4H"] + (1440 - res["D44KHC"]) * res["D4SH"]))
-
-        hsv := RGBToHSV(colorObj.r, colorObj.g, colorObj.b)
-
-        isRedHue := (hsv.h <= 30 || hsv.h >= 330)  ; 红色色相范围
-        isSaturated := (hsv.s > 0.7)               ; 饱和度
-        isBright := (hsv.v > 0.35)                 ; 亮度
-
-        if (isRedHue && isSaturated && isBright) {
-
-            grayHsv := RGBToHSV(grayColor.r, grayColor.g, grayColor.b)
-
-            isGrayBackground := (grayHsv.s < 0.3 && grayHsv.v < 0.3)
-
-            return isGrayBackground
-        }
-    }
-    return false
-}
-
-/**
- * 血条检测函数
- * @param res {Map} 窗口分辨率信息(可选)
- * @returns {Boolean} 是否检测到血条
- */
-CheckPauseByBlood(res := unset, pixelCache := unset) {
-    if !IsSet(res)
-        res := GetWindowInfo()
-    
-    ; 定义血条检测坐标（怪物和Boss血条位置）
-    bloodCoords := [
-        {x: 1605, y: 85},   ; 怪物血条上边缘
-        {x: 1605, y: 95},   ; 怪物血条下边缘
-        {x: 1435, y: 85},   ; Boss血条上边缘
-        {x: 1435, y: 95}    ; Boss血条下边缘
-    ]
-
+CheckPauseByEnter(allcoords, pixelCache := unset) {
     try {
-        ; 一次性获取所有血条坐标的颜色
-        ; 检测血条红色像素
-        hitCount := 0
-        bloodColors := []
-        for i, coord in bloodCoords {
-            x := Round(res["CD4W"] + (coord.x - res["D44KWC"]) * res["D4SW"])
-            y := Round(res["CD4H"] + (coord.y - res["D44KHC"]) * res["D4SH"])
-            key := x . "," . y  ; 使用坐标组合作为缓存键
-            bloodColors := (IsSet(pixelCache) && pixelCache.Has(key)) ? pixelCache[key] : GetPixelRGB(x, y)
-            if (bloodColors.r > (bloodColors.g + bloodColors.b) * 2 && bloodColors.r > 100) {
-                hitCount++
-                return true
-            }
+        ; 定义检测点配置
+        grayPoint := "dialog_gray_bg"
+        redPoints := ["dialog_red_btn_1", "dialog_red_btn_2", "dialog_red_btn_3", 
+                     "dialog_red_btn_4", "dialog_red_btn_5", "dialog_red_btn_6"]
+        
+        ; 1. 检测灰色背景
+        coord := allcoords[grayPoint]
+        key := coord.x . "," . coord.y
+        
+        grayColor := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
+            pixelCache[key] : GetPixelRGB(coord.x, coord.y)
+
+        isGrayBackground := false
+        try {
+            grayHsv := RGBToHSV(grayColor.r, grayColor.g, grayColor.b)
+            isGrayBackground := (grayHsv.s < 0.3 && grayHsv.v < 0.3)
+        } catch {
+            isGrayBackground := false
         }
+
+        if (!isGrayBackground)
+            return false
+
+        ; 2. 检测红色按钮
+        loop 6 {
+            coord := allcoords[redPoints[A_Index]]
+            key := coord.x . "," . coord.y
+            
+            colorObj := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
+                pixelCache[key] : GetPixelRGB(coord.x, coord.y)
+
+            isRedButton := false
+            try {
+                hsv := RGBToHSV(colorObj.r, colorObj.g, colorObj.b)
+                isRedHue := (hsv.h <= 30 || hsv.h >= 330)  ; 红色色相范围
+                isSaturated := (hsv.s > 0.7)               ; 饱和度
+                isBright := (hsv.v > 0.35)                 ; 亮度
+                isRedButton := (isRedHue && isSaturated && isBright)
+            } catch {
+                isRedButton := false
+            }
+
+            if (isRedButton)
+                return true
+        }
+        
         return false
+        
     } catch as err {
         return false
     }
 }
 /**
+ * 检测boss血条
+ * @param pixelCache {Map} 像素缓存
+ * @returns {Boolean} 是否检测到boss血条
+ */
+CheckBoss(allcoords, pixelCache := unset) {
+    try {
+        ; 定义检测点配置
+        uiPoints := ["boss_ui_top", "boss_ui_bottom"]
+        bloodPoints := ["boss_blood_top", "boss_blood_bottom"]
+        
+        ; 1. 检测UI是否为灰色（快速筛选）
+        loop 2 {
+            coord := allcoords[uiPoints[A_Index]]
+            key := coord.x . "," . coord.y
+            
+            color := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
+                pixelCache[key] : GetPixelRGB(coord.x, coord.y)
+            
+            try {
+                rgbRange := Max(color.r, color.g, color.b) - Min(color.r, color.g, color.b)
+                if (rgbRange > 50)
+                    return false
+            } catch {
+                return false
+            }
+        }
+        
+        ; 2. UI为灰色时才检测血条红色
+        loop 2 {
+            coord := allcoords[bloodPoints[A_Index]]
+            key := coord.x . "," . coord.y
+            
+            color := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
+                pixelCache[key] : GetPixelRGB(coord.x, coord.y)
+            
+            try {
+                if (color.r <= (color.g + color.b) * 1.5)
+                    return false
+            } catch {
+                return false
+            }
+        }
+        
+        return true
+
+    } catch as err {
+        return false
+    }
+}
+
+/**
+ * 检测monster血条
+ * @param pixelCache {Map} 像素缓存
+ * @returns {Boolean} 是否检测到monster血条
+ */
+CheckMonster(allcoords, pixelCache := unset) {
+    try {
+        ; 定义检测点配置
+        uiPoints := ["monster_ui_top", "monster_ui_bottom"]
+        bloodPoints := ["monster_blood_top", "monster_blood_bottom"]
+        
+        ; 1. 检测UI是否为灰色（快速筛选）
+        loop 2 {
+            coord := allcoords[uiPoints[A_Index]]
+            key := coord.x . "," . coord.y
+            
+            color := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
+                pixelCache[key] : GetPixelRGB(coord.x, coord.y)
+            
+            try {
+                rgbRange := Max(color.r, color.g, color.b) - Min(color.r, color.g, color.b)
+                if (rgbRange > 50)
+                    return false
+            } catch {
+                return false
+            }
+        }
+        
+        ; 2. UI为灰色时才检测血条红色
+        loop 2 {
+            coord := allcoords[bloodPoints[A_Index]]
+            key := coord.x . "," . coord.y
+            
+            color := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
+                pixelCache[key] : GetPixelRGB(coord.x, coord.y)
+            
+            try {
+                if (color.r <= (color.g + color.b) * 1.5)
+                    return false
+            } catch {
+                return false
+            }
+        }
+        
+        return true
+
+    } catch as err {
+        return false
+    }
+}
+
+/**
  * 定时检测血条并自动暂停/启动宏
  */
 AutoPauseByBlood() {
-    global isRunning, isPaused, uCtrl
+    global isPaused, uCtrl, allcoords
     static pauseMissCount := 0
     static resumeHitCount := 0
 
-    ; 读取多次确认次数（带默认值和容错）
     PAUSE := uCtrl["ipPause"]["pauseConfirm"].Value
     RESUME := uCtrl["ipPause"]["resumeConfirm"].Value
 
-    if (!isRunning || uCtrl["ipPause"]["enable"].Value != 1)
-        return
+    if (!allcoords.Has("monster_blood_top") || !allcoords.Has("boss_blood_top")) {
+        CoordManager()
+    }
 
-    ; 像素缓存进行血条检测
-    res := GetWindowInfo()
-    pixelCache := Map()
-    bloodDetected := CheckPauseByBlood(res, pixelCache)
+    bloodDetected := false
+    
+    try {
+        pixelCache := Map()
+        if (CheckMonster(allcoords, pixelCache)) {
+            bloodDetected := true
+        }
+        else if (CheckBoss(allcoords, pixelCache)) {
+            bloodDetected := true
+        }
+    } catch as err {
+        bloodDetected := false
+    }
 
     if (isPaused["blood"]) {
         if (bloodDetected) {
@@ -1393,24 +1538,22 @@ AutoPauseByBlood() {
  * 检测TAB键打开的界面和对话框
  */
 AutoPauseByTAB() {
-    global isRunning, isPaused, uCtrl
+    global isPaused, uCtrl, allcoords
     static pauseMissCount := 0
     static resumeHitCount := 0
 
     ; 读取多次确认次数（带默认值和容错）
-    PAUSE_CONFIRM := uCtrl["tabPause"].Has("pauseConfirm") ? Max(1, Min(9, Integer(uCtrl["tabPause"]["pauseConfirm"].Value
-    ))) : 2
-    RESUME_CONFIRM := uCtrl["tabPause"].Has("resumeConfirm") ? Max(1, Min(9, Integer(uCtrl["tabPause"]["resumeConfirm"]
-        .Value))) : 2
-
-    ; 如果宏未运行或界面检测未启用，则直接返回
-    if (!isRunning || uCtrl["tabPause"]["enable"].Value != 1)
-        return
+    PAUSE_CONFIRM := uCtrl["tabPause"]["pauseConfirm"].Value
+    RESUME_CONFIRM := uCtrl["tabPause"]["resumeConfirm"].Value
+    
+    if (!allcoords.Has("skill_bar_blue") || !allcoords.Has("tab_interface_red")) {
+        CoordManager()
+    }
 
     try {
         res := GetWindowInfo()
         pixelCache := Map()
-        keyPoints := CheckKeyPoints(res, pixelCache)
+        keyPoints := CheckKeyPoints(allcoords, pixelCache)
 
         ; TAB界面暂停时，检测是否关闭
         if (isPaused["tab"]) {
@@ -1423,7 +1566,7 @@ AutoPauseByTAB() {
 
         ; 对话框暂停时，检测是否关闭（多次确认）
         if (isPaused["enter"]) {
-            if (!CheckPauseByEnter(res, pixelCache)) {
+            if (!CheckPauseByEnter(allcoords, pixelCache)) {
                 resumeHitCount++
                 pauseMissCount := 0
                 if (resumeHitCount >= RESUME_CONFIRM) {
@@ -1441,7 +1584,7 @@ AutoPauseByTAB() {
             TogglePause("tab", true)
             UpdateStatus("已暂停", "检测到地图界面，自动暂停")
             return
-        } else if (CheckPauseByEnter(res, pixelCache)) {
+        } else if (CheckPauseByEnter(allcoords, pixelCache)) {
             pauseMissCount++
             resumeHitCount := 0
             if (pauseMissCount >= PAUSE_CONFIRM) {
@@ -1457,15 +1600,20 @@ AutoPauseByTAB() {
 
 /**
  * 检测技能激活状态
- * @param {Integer} x - 检测点X坐标
- * @param {Integer} y - 检测点Y坐标
+ * @param {String|Integer} skillIndex - 技能索引
  * @returns {Boolean} - 技能是否激活
  */
-IsSkillActive(x, y) {
-    global uCtrl
+IsSkillActive(skillIndex) {
+    global bSkill
+    
+    if (!bSkill.Has(skillIndex))
+        return false
+        
+    coord := bSkill[skillIndex]
+    
     loop 2 {
         try {
-            color := GetPixelRGBNoCache(x, y)
+            color := GetPixelRGBNoCache(coord.x, coord.y)
             hsv := RGBToHSV(color.r, color.g, color.b)
             isGreenHue := (hsv.h >= 60 && hsv.h <= 180)  ; 绿色色相范围
             isSaturated := (hsv.s > 0.3)  ; 饱和度大于30%
@@ -1484,15 +1632,18 @@ IsSkillActive(x, y) {
  * @returns {Boolean} - 资源是否充足
  */
 IsResourceSufficient() {
-    global uCtrl
-    res := GetWindowInfo()
-    x := Round(res["CD4W"] + (2620 - res["D44KWC"]) * res["D4SW"])
-    y := Round(res["CD4H"] + (1875 - res["D44KHC"]) * res["D4SH"])
+    global allcoords
+    
+    ; 确保坐标已初始化
+    if (!allcoords.Has("resource_bar")) {
+        CoordManager()
+    }
+    
+    coord := allcoords["resource_bar"]
 
     loop 5 {
         try {
-            color := GetPixelRGBNoCache(x, y + (A_Index - 1))
-
+            color := GetPixelRGBNoCache(coord.x, coord.y + (A_Index - 1))
             hsv := RGBToHSV(color.r, color.g, color.b)
 
             if (hsv.s > 0.30 && hsv.v > 0.15)
@@ -1614,12 +1765,46 @@ GetPixelRGBNoCache(x, y) {
     return GetPixelRGB(x, y, false)
 }
 
+/**
+ * 鼠标自动移动函数
+ */
+MoveMouseToNextPoint() {
+    global uCtrl, allcoords
+
+    ; 确保坐标已初始化
+    if (!allcoords.Has("mouse_move_1")) {
+        CoordManager()
+    }
+
+    try {
+        ; 确保currentPoint字段存在
+        if (!uCtrl["mouseAutoMove"].Has("currentPoint"))
+            uCtrl["mouseAutoMove"]["currentPoint"] := 1
+
+        ; 获取当前点索引
+        currentIndex := uCtrl["mouseAutoMove"]["currentPoint"]
+
+        ; 验证索引范围
+        if (currentIndex < 1 || currentIndex > 6)
+            currentIndex := 1
+
+        ; 移动鼠标到当前点
+        currentPoint := allcoords["mouse_move_" currentIndex]
+        MouseMove(currentPoint.x, currentPoint.y, 0)
+
+        ; 更新到下一个点
+        uCtrl["mouseAutoMove"]["currentPoint"] := Mod(currentIndex, 6) + 1
+
+    }
+}
+
+
 ; ==================== 设置管理 ====================
 /**
  * 初始化配置方案列表
  */
 InitializeProfiles() {
-    global profileList, profileDropDown, currentProfileName
+    global profileList, profileDropDown, ProfileName
 
     ; 主配置文件路径
     settingsFile := A_ScriptDir "\settings.ini"
@@ -1701,10 +1886,10 @@ InitializeProfiles() {
  * 更新配置列表下拉框
  */
 UpdateProfileDropDown() {
-    global profileList, profileDropDown, currentProfileName
+    global profileList, profileDropDown, ProfileName
 
     ; 保存当前选择
-    currentSelection := currentProfileName
+    currentSelection := ProfileName
     ; 清空并重新填充下拉框
     profileDropDown.Delete()
     for i, name in profileList {
@@ -1731,14 +1916,14 @@ UpdateProfileDropDown() {
  * @param {Object} ctrl - 控件对象
  */
 LoadSelectedProfile(ctrl, *) {
-    global profileList, currentProfileName
+    global profileList, ProfileName
 
     if (ctrl.Value <= 0 || ctrl.Value > profileList.Length)
         return
 
     ; 获取选定的配置名
     selectedProfile := profileList[ctrl.Value]
-    currentProfileName := selectedProfile
+    ProfileName := selectedProfile
 
     ; 更新输入框
     profileNameInput.Value := selectedProfile
@@ -1752,7 +1937,7 @@ LoadSelectedProfile(ctrl, *) {
  * 保存当前配置为方案
  */
 SaveProfile(*) {
-    global currentProfileName, profileNameInput, profileList
+    global ProfileName, profileNameInput, profileList
 
     ; 获取输入的配置名
     profileName := profileNameInput.Value
@@ -1764,7 +1949,7 @@ SaveProfile(*) {
     }
 
     ; 确认保存操作
-    if (currentProfileName != profileName && InArray(profileList, profileName)) {
+    if (ProfileName != profileName && InArray(profileList, profileName)) {
         if (MsgBox("配置方案「" profileName "」已存在，是否覆盖？", "确认", 4) != "Yes")
             return
     }
@@ -1781,7 +1966,7 @@ SaveProfile(*) {
     }
 
     ; 更新当前配置名
-    currentProfileName := profileName
+    ProfileName := profileName
 
     ; 记住这个配置作为最后使用的配置
     IniWrite(profileName, A_ScriptDir "\settings.ini", "Global", "LastUsedProfile")
@@ -1802,23 +1987,23 @@ SaveProfile(*) {
  * 删除当前配置方案
  */
 DeleteProfile(*) {
-    global currentProfileName, profileList
+    global ProfileName, profileList
 
     settingsFile := A_ScriptDir "\settings.ini"
 
     ; 不能删除默认配置
-    if (currentProfileName = "默认") {
+    if (ProfileName = "默认") {
         MsgBox("无法删除默认配置方案", "提示", 48)
         return
     }
 
     ; 确认删除
-    if (MsgBox("确定要删除配置方案「" currentProfileName "」吗？", "确认", 4) != "Yes")
+    if (MsgBox("确定要删除配置方案「" ProfileName "」吗？", "确认", 4) != "Yes")
         return
 
     ; 从列表中移除
     for i, name in profileList {
-        if (name = currentProfileName) {
+        if (name = ProfileName) {
             profileList.RemoveAt(i)
             break
         }
@@ -1828,18 +2013,18 @@ DeleteProfile(*) {
     IniWrite(Join(profileList, "|"), settingsFile, "Profiles", "List")
 
     ; 从设置文件中删除此配置方案的所有设置
-    DeleteProfileSettings(settingsFile, currentProfileName)
+    DeleteProfileSettings(settingsFile, ProfileName)
 
     ; 更新下拉框并选择默认配置
     UpdateProfileDropDown()
     profileDropDown.Choose(1)  ; 选择默认配置
-    currentProfileName := "默认"
+    ProfileName := "默认"
     profileNameInput.Value := "默认"
 
     ; 加载默认配置
     LoadSettings(settingsFile, "默认")
 
-    DebugLog("已删除配置方案: " currentProfileName)
+    DebugLog("已删除配置方案: " ProfileName)
     statusBar.Text := "配置方案已删除，已加载默认配置"
 }
 
@@ -2073,6 +2258,7 @@ SaveuSkillSettings(file, profileName) {
     IniWrite(uCtrl["shift"]["enable"].Value, file, section, "ShiftEnabled")
     IniWrite(uCtrl["ranDom"]["enable"].Value, file, section, "RandomEnabled")
     IniWrite(uCtrl["ranDom"]["max"].Value, file, section, "RandomMax")
+    IniWrite(uCtrl["D4only"]["enable"].Value, file, section, "D4onlyEnable")
 
     ; 保存其他全局设置
     IniWrite(hotkeyControl.Value, file, section, "StartStopKey")
@@ -2233,7 +2419,7 @@ LoaduSkillSettings(file, profileName) {
         ; 加载血条检测相关设置
         uCtrl["ipPause"]["enable"].Value := IniRead(file, section, "IpPauseEnable", "0")
         uCtrl["ipPause"]["interval"].Value := IniRead(file, section, "IpPauseInterval", "50")
-        uCtrl["ipPause"]["pauseConfirm"].Value := IniRead(file, section, "IpPausePauseConfirm", "5")
+        uCtrl["ipPause"]["pauseConfirm"].Value := IniRead(file, section, "IpPausePauseConfirm", "2")
         uCtrl["ipPause"]["resumeConfirm"].Value := IniRead(file, section, "IpPauseResumeConfirm", "2")
 
         ; 加载TAB检测相关设置
@@ -2246,6 +2432,7 @@ LoaduSkillSettings(file, profileName) {
         uCtrl["shift"]["enable"].Value := IniRead(file, section, "ShiftEnabled", "0")
         uCtrl["ranDom"]["enable"].Value := IniRead(file, section, "RandomEnabled", "0")
         uCtrl["ranDom"]["max"].Value := IniRead(file, section, "RandomMax", "10")
+        uCtrl["D4only"]["enable"].Value := IniRead(file, section, "D4onlyEnable", "1")
 
         ; 加载全局热键
         hotkeyControl.Value := IniRead(file, section, "StartStopKey", "F1")
@@ -2291,11 +2478,10 @@ LoadGlobalHotkey() {
 
 ~LButton::
 {
-    global isRunning, uCtrl, isPaused
+    global uCtrl, isPaused
     static lastClickTime := 0
 
-    if (!isRunning || !uCtrl.Has("dcPause") || !uCtrl["dcPause"].Has("enable") || uCtrl["dcPause"]["enable"].Value != 1
-    )
+    if (uCtrl["dcPause"]["enable"].Value != 1)
         return
 
     currentTime := A_TickCount
