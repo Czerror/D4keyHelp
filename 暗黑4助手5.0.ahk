@@ -1372,7 +1372,7 @@ CheckBoss(allcoords, pixelCache := unset) {
             
             try {
                 rgbRange := Max(color.r, color.g, color.b) - Min(color.r, color.g, color.b)
-                if (rgbRange > 50)
+                if (rgbRange > 25)
                     return false
             } catch {
                 return false
@@ -1616,7 +1616,7 @@ IsResourceSufficient() {
         try {
             color := GetPixelRGBNoCache(coord.x, coord.y + (A_Index - 1))
             Colorrange := Max(color.r, color.g, color.b) - Min(color.r, color.g, color.b)
-            if (Colorrange < 30)
+            if (Colorrange > 25)  ; 如果颜色差大于25，认为资源充足
                 return true
         } catch {
             Sleep 5
