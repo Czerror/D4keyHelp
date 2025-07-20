@@ -4,7 +4,7 @@ ProcessSetPriority "High"
 
 ; ========== 全局变量定义 ==========
 ; 核心状态变量
-global DEBUG := false              ; 是否启用调试模式
+global DEBUG := false               ; 启用调试模式，用于诊断热键问题
 global debugLogFile := A_ScriptDir "\debugd4.log"
 global isRunning := false          ; 宏是否运行中
 ; ==================== 工具类函数 ====================
@@ -85,7 +85,7 @@ CreateMainGUI() {
 
     ;# ==================== 主控制区域 ==================== #
     myGui.AddGroupBox("x10 y10 w280 h120", "运行模式: ")
-    statusText := myGui.AddText("x30 y35 w140 h20", "状态: 未运行")  ; 状态指示器
+    statusText := myGui.AddText("x30 y35 w160 h20", "状态: 未运行")  ; 状态指示器
     myGui.AddButton("x30 y65 w80 h30", "开始/停止").OnEvent("Click", ToggleMacro)
     ;# ==================== 热键控制区域 ==================== #
     hotkeyModeDropDown := myGui.AddDropDownList("x205 y70 w65 h90 Choose1", ["自定义", "侧键1", "侧键2"])
@@ -324,19 +324,23 @@ OnHotkeyModeChange(ctrl, *) {
         settingsFile := A_ScriptDir "\settings.ini"
         section := profileName.Value "_uSkill"
         savedHotkey := IniRead(settingsFile, section, config.configKey, config.defaultValue)
-        
-        hotkeyControl.Value := savedHotkey
-        LoadGlobalHotkey()
+        if (hotkeyControl.Value != savedHotkey) {
+            hotkeyControl.Value := savedHotkey
+            LoadGlobalHotkey()
+        }
         statusBar.Text := "已切换到" config.modeName " - 热键: " savedHotkey
         
     } catch {
-        ; 统一的错误处理
+        newHotkey := config.defaultValue
         if (mode == 1 && hotkeyControl.Value == "") {
-            hotkeyControl.Value := config.defaultValue
+            newHotkey := config.defaultValue
         } else if (mode != 1) {
-            hotkeyControl.Value := config.defaultValue
+            newHotkey := config.defaultValue
         }
-        LoadGlobalHotkey()
+        if (hotkeyControl.Value != newHotkey) {
+            hotkeyControl.Value := newHotkey
+            LoadGlobalHotkey()
+        }
         statusBar.Text := config.errorMsg
     }
 }
@@ -348,22 +352,28 @@ LoadGlobalHotkey() {
     global hotkeyControl, statusBar
     static currentHotkey := ""
 
-    if (hotkeyControl.Value = "") {
-        hotkeyControl.Value := "F1"
-        statusBar.Text := "热键不能为空，已恢复为: F1"
-        return
+    ; 处理空热键情况
+    newHotkey := hotkeyControl.Value
+    if (newHotkey = "") {
+        newHotkey := "F1"
+        hotkeyControl.Value := newHotkey
     }
 
     try {
+        ; 禁用当前热键
         if (currentHotkey != "") {
-            Hotkey(currentHotkey, ToggleMacro, "Off")
+            try {
+                Hotkey(currentHotkey, "Off")
+            } catch {
+            }
         }
-
-        newHotkey := hotkeyControl.Value
+        
+        ; 设置新热键
         Hotkey(newHotkey, ToggleMacro, "On")
         currentHotkey := newHotkey
         statusBar.Text := "热键已更新: " newHotkey
     } catch as err {
+        ; 设置失败时恢复
         hotkeyControl.Value := currentHotkey ? currentHotkey : "F1"
         statusBar.Text := "热键设置失败: " err.Message
     }
@@ -371,24 +381,23 @@ LoadGlobalHotkey() {
 
 ; ==================== 核心控制函数 ====================
 /**
- * 切换宏运行状态
+ * 核心启动函数
  */
 ToggleMacro(*) {
-    global isRunning
+    global isRunning, uCtrl
 
     isRunning := !isRunning
-    TogglePause()
+    
     if isRunning {
+        
         if (uCtrl["D4only"]["enable"].Value == 1) {
-
             if WinActive("ahk_class Diablo IV Main Window Class") {
                 StartAllTimers()
                 ManageTimers("all", true)
                 UpdateStatus("运行中", "宏已启动")
             } else {
-                StartAllTimers()
-                ManageTimers("all", true)
                 TogglePause("window", true)
+                ManageTimers("all", true)
             }
         } else {
             StartAllTimers()
@@ -502,7 +511,7 @@ StartAllTimers() {
 
     if (RunMod.Value = 2) {
         keyQueue := []
-        SetTimer(KeyQueueWorker, 50)
+        SetTimer(KeyQueueWorker, 10)
     }
 
     ; ===== 技能按键 =====
@@ -531,7 +540,7 @@ StartAllTimers() {
  * 停止所有定时器
  */
 StopAllTimers() {
-    global skillTimers, RunMod
+    global skillTimers, RunMod, uCtrl
 
     if (RunMod.Value = 2) {
         SetTimer(KeyQueueWorker, 0)
@@ -545,7 +554,9 @@ StopAllTimers() {
         skillTimers.Clear()
     }
 
-    SetTimer(MoveMouse, 0)
+    if (uCtrl["mouseAutoMove"]["enable"].Value) {
+        SetTimer(MoveMouse, 0)
+    }
 
     ReleaseAllKeys()
 }
@@ -554,7 +565,7 @@ StopAllTimers() {
  * 重置所有变量
  */
 ReleaseAllKeys() {
-    global holdStates
+    global holdStates, uCtrl
 
     if IsSet(holdStates){
         for uniqueKey, _ in holdStates {
@@ -581,9 +592,9 @@ ReleaseAllKeys() {
         keyQueue := []
     }
 
-    Send "{Shift up}"
-    Send "{Ctrl up}"
-    Send "{Alt up}"
+    if uCtrl["shift"]["enable"].Value {
+        Send "{Blind}{Shift up}"
+    }
 }
 
 /**
@@ -718,17 +729,17 @@ HandleKeyMode(keyData) {
 
             if (keyData.isMouse) {
                 if (shiftEnabled) {
-                    Send "{Blind} {Shift down}"
+                    Send "{Blind}{Shift down}"
                     Click(keyData.key)
-                    Send "{Blind} {Shift up}"
+                    Send "{Blind}{Shift up}"
                 } else {
                     Click(keyData.key)
                 }
             } else {
                 if (shiftEnabled) {
-                    Send "{Blind} {Shift down}"
+                    Send "{Blind}{Shift down}"
                     Send "{" keyData.key "}"
-                    Send "{Blind} {Shift up}"
+                    Send "{Blind}{Shift up}"
                 } else {
                     Send "{" keyData.key "}"
                 }
@@ -756,17 +767,17 @@ HandleKeyMode(keyData) {
             if (IsResourceSufficient()) {
                 if (keyData.isMouse) {
                     if (shiftEnabled) {
-                        Send "{Blind} {Shift down}"
+                        Send "{Blind}{Shift down}"
                         Click(keyData.key)
-                        Send "{Blind} {Shift up}"
+                        Send "{Blind}{Shift up}"
                     } else {
                         Click(keyData.key)
                     }
                 } else {
                     if (shiftEnabled) {
-                        Send "{Blind} {Shift down}"
+                        Send "{Blind}{Shift down}"
                         Send "{" keyData.key "}"
-                        Send "{Blind} {Shift up}"
+                        Send "{Blind}{Shift up}"
                     } else {
                         Send "{" keyData.key "}"
                     }
@@ -776,17 +787,17 @@ HandleKeyMode(keyData) {
         default: ; 连点模式
             if (keyData.isMouse) {
                 if (shiftEnabled) {
-                    Send "{Blind} {Shift down}"
+                    Send "{Blind}{Shift down}"
                     Click(keyData.key)
-                    Send "{Blind} {Shift up}"
+                    Send "{Blind}{Shift up}"
                 } else {
                     Click(keyData.key)
                 }
             } else {
                 if (shiftEnabled) {
-                    Send "{Blind} {Shift down}"
+                    Send "{Blind}{Shift down}"
                     Send "{" keyData.key "}"
-                    Send "{Blind} {Shift up}"
+                    Send "{Blind}{Shift up}"
                 } else {
                     Send "{" keyData.key "}"
                 }
@@ -1931,7 +1942,6 @@ DeleteProfile(*) {
 
     LoadSettings(settingsFile, "默认")
 
-    DebugLog("已删除配置方案: " currentProfileName)
     statusBar.Text := "配置方案已删除，已加载默认配置"
 }
 
@@ -1964,7 +1974,6 @@ DeleteProfileSettings(file, profileName) {
     FileDelete(file)
     FileAppend(Join(newContent, "`n"), file)
 
-    DebugLog("已从配置文件删除配置方案设置: " profileName)
 }
 
 /**
@@ -2070,7 +2079,6 @@ SaveSkillSettings(file, profileName) {
 
         modeIndex := cSkill[i]["mode"].Value
         IniWrite(modeIndex, file, section, "Skill" i "Mode")
-        DebugLog("保存技能" i "模式: " modeIndex)
     }
 }
 
