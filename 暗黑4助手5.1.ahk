@@ -970,6 +970,14 @@ PressKeyCallback(category, identifier) {
 
     timerKey := category . identifier
 
+    if (IsSet(skillTimers) && skillTimers.Has(timerKey)) {
+        try {
+            SetTimer(skillTimers[timerKey], 0)
+        } catch {
+        }
+        skillTimers.Delete(timerKey)
+    }
+
     config := ""
     switch category {
         case "skill":
