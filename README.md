@@ -1,11 +1,10 @@
 # D4keyHelp
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-D4KeyHelp是一个有图形界面，可自定义配置的暗黑4鼠标宏工具。
+D4KeyHelp是一个有图形界面，可自定义配置的暗黑4鼠标宏工具。图形界面由@不忘初心2025 提供
 
-运行代码请使用最新版的AHK v2.0软件!并非常见的V1.3的版本,你也可以直接在release处下载.exe而不安装AHK.
+运行代码请使用最新版的AHK v2.0软件!
 
 F1 启动/暂停战斗宏(支持自定义并保存在设置中)
-F3 法师专属卡快照(支持自定义并保存在设置中)
 
 理论所有功能支持所有分辨率和窗口
 
