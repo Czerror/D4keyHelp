@@ -7,3 +7,7 @@
 *.txt
 *.json
 *dev*
+ImagePut.ahk
+ImageActionsforFindText.ahk
+Gdip_All.ahk
+FindTextv2.ahk
