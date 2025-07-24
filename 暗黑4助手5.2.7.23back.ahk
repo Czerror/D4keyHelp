@@ -144,6 +144,8 @@ CreateMainGUI() {
 
     ;|----------------------- 自动启停 -----------------------|
     myGui.AddGroupBox("x325 y160 w140 h230", "启停管理")
+    myGui.AddText("x335 y250 w100 h20", "灵敏度:")
+    myGui.AddText("x335 y310 w100 h20", "灵敏度:")
     myGui.AddButton("x335 y340 w120 h25", "刷新检测").OnEvent("Click", RefreshDetection)
 }
 
@@ -247,38 +249,39 @@ CreateAllControls() {
     ;|---------------------- 血条检测 ------------------------|
     uCtrl["ipPause"] := Map(
         "text", myGui.AddText("x335 y220 w60 h20", "血条检测:"),
+        "stopText", myGui.AddText("x385 y250 w15 h20", "停"),
+        "startText", myGui.AddText("x425 y250 w15 h20", "启"),
         "enable", myGui.AddCheckbox("x400 y220 w20 h20"),
-        "interval", myGui.AddEdit("x420 y220 w40 h20", "50")
+        "interval", myGui.AddEdit("x420 y220 w40 h20", "50"),
+        "pauseConfirm", myGui.AddEdit("x400 y250 w20 h20", "2"),
+        "resumeConfirm", myGui.AddEdit("x440 y250 w20 h20", "2")
     )
     ; 输入验证
     uCtrl["ipPause"]["interval"].OnEvent("LoseFocus", (*) => (
         LimitEditValue(uCtrl["ipPause"]["interval"], 10, 1000)))
+    uCtrl["ipPause"]["pauseConfirm"].OnEvent("LoseFocus", (*) => (
+        LimitEditValue(uCtrl["ipPause"]["pauseConfirm"], 1, 9)))
+    uCtrl["ipPause"]["resumeConfirm"].OnEvent("LoseFocus", (*) => (
+        LimitEditValue(uCtrl["ipPause"]["resumeConfirm"], 1, 9)))
 
     ;|---------------------- 界面检测 ------------------------|
     uCtrl["tabPause"] := Map(
-        "text", myGui.AddText("x335 y250 w60 h20", "界面检测:"),
-        "enable", myGui.AddCheckbox("x400 y250 w20 h20"),
-        "interval", myGui.AddEdit("x420 y250 w40 h20", "50")
+        "text", myGui.AddText("x335 y280 w60 h20", "界面检测:"),
+        "stopText", myGui.AddText("x385 y310 w15 h20", "停"),
+        "startText", myGui.AddText("x425 y310 w15 h20", "启"),
+        "enable", myGui.AddCheckbox("x400 y280 w20 h20"),
+        "interval", myGui.AddEdit("x420 y280 w40 h20", "50"),
+        "pauseConfirm", myGui.AddEdit("x400 y310 w20 h20", "2"),
+        "resumeConfirm", myGui.AddEdit("x440 y310 w20 h20", "2")
     )
     ; 输入验证
     uCtrl["tabPause"]["interval"].OnEvent("LoseFocus", (*) => (
         LimitEditValue(uCtrl["tabPause"]["interval"], 10, 1000)))
-    ;|---------------------- 坐标偏移量 ------------------------|
-    uCtrl["xy"] := Map(
-        "text", myGui.AddText("x335 y280 w60 h20", "偏移:"),
-        "text2", myGui.AddText("x375 y280 w15 h20", "X"),
-        "x", myGui.AddEdit("x390 y278 w25 h20", "0"),
-        "text3", myGui.AddText("x420 y280 w15 h20", "Y"),
-        "y", myGui.AddEdit("x435 y278 w25 h20", "0")
-    )
-    ; 输入验证
-    uCtrl["xy"]["x"].OnEvent("LoseFocus", (*) => (
-        uCtrl["xy"]["x"].Value := Integer(uCtrl["xy"]["x"].Value)
-        LimitEditValue(uCtrl["xy"]["x"], -3, 3)))
-    uCtrl["xy"]["y"].OnEvent("LoseFocus", (*) => (
-        uCtrl["xy"]["y"].Value := Integer(uCtrl["xy"]["y"].Value)
-        LimitEditValue(uCtrl["xy"]["y"], -3, 3)))
-    ;|---------------------- 双击暂停 ------------------------|
+    uCtrl["tabPause"]["pauseConfirm"].OnEvent("LoseFocus", (*) => (
+        LimitEditValue(uCtrl["tabPause"]["pauseConfirm"], 1, 9)))
+    uCtrl["tabPause"]["resumeConfirm"].OnEvent("LoseFocus", (*) => (
+        LimitEditValue(uCtrl["tabPause"]["resumeConfirm"], 1, 9)))
+
     uCtrl["dcPause"] := Map(
         "text", myGui.AddText("x335 y190 w60 h20", "双击暂停:"),
         "enable", myGui.AddCheckbox("x400 y190 w20 h20"),
@@ -305,30 +308,8 @@ CreateAllControls() {
  * @param {Number} max - 最大值
  */
 LimitEditValue(ctrl, min, max) {
-    try {
-        inputValue := Trim(ctrl.Value)
-        if (inputValue = "" || inputValue = "-") {
-            ctrl.Value := min
-            return
-        }
-
-        value := Number(inputValue)
-
-        if (!IsNumber(value)) {
-            ctrl.Value := min
-            return
-        }
-        if (value < min) {
-            ctrl.Value := min
-        } else if (value > max) {
-            ctrl.Value := max
-        } else {
-            ctrl.Value := value
-        }
-        
-    } catch {
-        ctrl.Value := min
-    }
+    value := ctrl.Value + 0
+    ctrl.Value := value < min ? min : (value > max ? max : value)
     return
 }
 
@@ -1040,6 +1021,7 @@ CheckWindow() {
     }
 }
 
+
 /**
  * 获取窗口分辨率并计算缩放比例
  * @param D44KW {Integer} 参考分辨率宽度(默认3840，即4K宽度)
@@ -1106,9 +1088,9 @@ CoordManager() {
         "boss_blood_bottom", {x: 1435, y: 95},
         "monster_ui_top", {x: 1590, y: 75},
         "monster_ui_bottom", {x: 1590, y: 100},
-        "boss_ui_top", {x: 1425, y: 75},
-        "boss_ui_bottom", {x: 1425, y: 115},
-        "skill_bar_blue", {x: 1540, y: 1885},
+        "boss_ui_top", {x: 1426, y: 76},
+        "boss_ui_bottom", {x: 1426, y: 116},
+        "skill_bar_blue", {x: 1535, y: 1880},
         "tab_interface_red", {x: 3795, y: 90},
         "dialog_gray_bg", {x: 150, y: 2070},
         "resource_bar", {x: 2620, y: 1875}
@@ -1142,7 +1124,6 @@ CoordManager() {
 }
 
 Convert(coord, windowInfo := unset) {
-    global uCtrl
     static cacheInfo := unset
     if (!IsSet(cacheInfo)) {
         cacheInfo := GetWindowInfo()
@@ -1152,16 +1133,10 @@ Convert(coord, windowInfo := unset) {
     } else {
         useInfo := cacheInfo
     }
-    UserX := uCtrl["xy"]["x"].Value
-    UserY := uCtrl["xy"]["y"].Value
 
     x := Round(useInfo["CD4W"] + (coord.x - useInfo["D44KWC"]) * useInfo["D4S"])
     y := Round(useInfo["CD4H"] + (coord.y - useInfo["D44KHC"]) * useInfo["D4S"])
 
-    if (useInfo["D4S"] < 1) {
-        x += UserX
-        y += UserY
-    }
     return { x: x, y: y }
 }
 
@@ -1178,15 +1153,17 @@ CheckKeyPoints(allcoords, pixelCache := unset) {
 
     colorDFX := IsSet(pixelCache) && pixelCache.Has(dfxCoord.x . "," . dfxCoord.y) ? 
         pixelCache[dfxCoord.x . "," . dfxCoord.y] : GetPixelRGB(dfxCoord.x, dfxCoord.y)
+    
+    dfxHSV := RGBToHSV(colorDFX.r, colorDFX.g, colorDFX.b)
 
-    if (ColorDetector.IsBlue(colorDFX)) {
+    if (dfxHSV.h >= 180 && dfxHSV.h <= 270 && dfxHSV.s > 0.3 && dfxHSV.v > 0.2) {
         return {isBlueColor: true, isRedColor: false}
     }
 
     colorTAB := IsSet(pixelCache) && pixelCache.Has(tabCoord.x . "," . tabCoord.y) ? 
         pixelCache[tabCoord.x . "," . tabCoord.y] : GetPixelRGB(tabCoord.x, tabCoord.y)
 
-    if (ColorDetector.IsRed(colorTAB)) {
+    if (colorTAB.r > (colorTAB.g + colorTAB.b) * 1.5) {
         return {isBlueColor: false, isRedColor: true}
     } else {
         return {isBlueColor: true, isRedColor: false}
@@ -1211,20 +1188,38 @@ CheckPauseByEnter(allcoords, pixelCache := unset) {
         grayColor := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
             pixelCache[key] : GetPixelRGB(coord.x, coord.y)
 
-        if (!colorDetector.IsGray(grayColor))
+        isGrayBackground := false
+        try {
+            grayHsv := RGBToHSV(grayColor.r, grayColor.g, grayColor.b)
+            isGrayBackground := (grayHsv.s < 0.3 && grayHsv.v < 0.3)
+        } catch {
+            isGrayBackground := false
+        }
+
+        if (!isGrayBackground)
             return false
 
         ; 2. 检测红色按钮
-        for , point in redPoints {
-            coord := allcoords[point]
+        loop 6 {
+            coord := allcoords[redPoints[A_Index]]
             key := coord.x . "," . coord.y
             
             colorObj := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
                 pixelCache[key] : GetPixelRGB(coord.x, coord.y)
 
-            if (colorDetector.IsEnterred(colorObj)) {
-                return true
+            isRedButton := false
+            try {
+                hsv := RGBToHSV(colorObj.r, colorObj.g, colorObj.b)
+                isRedHue := (hsv.h <= 30 || hsv.h >= 330)  ; 红色色相范围
+                isSaturated := (hsv.s > 0.7)               ; 饱和度
+                isBright := (hsv.v > 0.35)                 ; 亮度
+                isRedButton := (isRedHue && isSaturated && isBright)
+            } catch {
+                isRedButton := false
             }
+
+            if (isRedButton)
+                return true
         }
         
         return false
@@ -1242,19 +1237,21 @@ CheckPauseByEnter(allcoords, pixelCache := unset) {
 CheckBoss(allcoords, pixelCache := unset) {
     try {
         coords := [
-            allcoords["boss_ui_top"],      ; UI顶部
-            allcoords["boss_ui_bottom"],   ; UI底部
-            allcoords["boss_blood_top"],   ; 血条顶部
-            allcoords["boss_blood_bottom"] ; 血条底部
+            allcoords["boss_ui_top"],      ; 索引1: UI顶部
+            allcoords["boss_ui_bottom"],   ; 索引2: UI底部
+            allcoords["boss_blood_top"],   ; 索引3: 血条顶部
+            allcoords["boss_blood_bottom"] ; 索引4: 血条底部
         ]
 
         colors := []
-        for coord in coords {
+        loop 4 {
+            coord := coords[A_Index]
             key := coord.x . "," . coord.y
             
             color := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
                 pixelCache[key] : GetPixelRGB(coord.x, coord.y)
             
+
             if (IsSet(pixelCache)) {
                 pixelCache[key] := color
             }
@@ -1262,35 +1259,33 @@ CheckBoss(allcoords, pixelCache := unset) {
             colors.Push(color)
         }
 
-        ; 检查UI部分颜色范围
-        for i in [1, 2] {
+        loop 2 {
+            color := colors[A_Index]
             try {
-                color := colors[i]
-                if (!ColorDetector.IsGray(color))
+                rgbRange := Max(color.r, color.g, color.b) - Min(color.r, color.g, color.b)
+                if (rgbRange > 50)
                     return false
             } catch {
                 return false
             }
         }
 
-        ; 检查血条部分红色主导
-        for i in [3, 4] {
+        loop 2 {
+            color := colors[A_Index + 2]
             try {
-                color := colors[i]
-                if (ColorDetector.IsRed(color))
-                    return true
+                if (color.r <= (color.g + color.b) * 1.5)
+                    return false
             } catch {
                 return false
             }
         }
         
-        return false
+        return true
 
     } catch as err {
         return false
     }
 }
-
 
 /**
  * 检测monster血条
@@ -1299,15 +1294,17 @@ CheckBoss(allcoords, pixelCache := unset) {
  */
 CheckMonster(allcoords, pixelCache := unset) {
     try {
+
         coords := [
-            allcoords["monster_ui_top"],      ; UI顶部
-            allcoords["monster_ui_bottom"],   ; UI底部
-            allcoords["monster_blood_top"],   ; 血条顶部
-            allcoords["monster_blood_bottom"] ; 血条底部
+            allcoords["monster_ui_top"],      ; 索引1: UI顶部
+            allcoords["monster_ui_bottom"],   ; 索引2: UI底部
+            allcoords["monster_blood_top"],   ; 索引3: 血条顶部
+            allcoords["monster_blood_bottom"] ; 索引4: 血条底部
         ]
 
         colors := []
-        for coord in coords {
+        loop 4 {
+            coord := coords[A_Index]
             key := coord.x . "," . coord.y
             
             color := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
@@ -1319,30 +1316,30 @@ CheckMonster(allcoords, pixelCache := unset) {
             
             colors.Push(color)
         }
+        
 
-        ; 检查UI部分颜色范围
-        for i in [1, 2] {
+        loop 2 {
+            color := colors[A_Index]
             try {
-                color := colors[i]
-                if (!ColorDetector.IsGray(color))
+                rgbRange := Max(color.r, color.g, color.b) - Min(color.r, color.g, color.b)
+                if (rgbRange > 50)
                     return false
             } catch {
                 return false
             }
         }
 
-        ; 检查血条部分红色主导
-        for i in [3, 4] {
+        loop 2 {
+            color := colors[A_Index + 2]
             try {
-                color := colors[i]
-                if (ColorDetector.IsRed(color))
-                    return true
+                if (color.r <= (color.g + color.b) * 1.5)
+                    return false
             } catch {
                 return false
             }
         }
         
-        return false
+        return true
 
     } catch as err {
         return false
@@ -1357,8 +1354,8 @@ AutoPauseByBlood() {
     static pauseMissCount := 0
     static resumeHitCount := 0
 
-    PAUSE := 2
-    RESUME := 2
+    PAUSE := uCtrl["ipPause"]["pauseConfirm"].Value
+    RESUME := uCtrl["ipPause"]["resumeConfirm"].Value
 
     bloodDetected := false
     
@@ -1410,8 +1407,8 @@ AutoPauseByTAB() {
     static enterPauseMissCount := 0
     static enterResumeHitCount := 0
 
-    TAB_PAUSE := 2
-    TAB_RESUME := 2
+    TAB_PAUSE := uCtrl["tabPause"]["pauseConfirm"].Value
+    TAB_RESUME := uCtrl["tabPause"]["resumeConfirm"].Value
 
     try {
         pixelCache := Map()
@@ -1485,7 +1482,11 @@ IsSkillActive(skillId, coord := unset) {
         loop 2 {
             try {
                 color := GetPixelRGB(coord.x, coord.y, false)
-                if (ColorDetector.IsGreen(color))
+                hsv := RGBToHSV(color.r, color.g, color.b)
+                isGreenHue := (hsv.h >= 60 && hsv.h <= 180)  ; 绿色色相范围
+                isSaturated := (hsv.s > 0.3)  ; 饱和度大于30%
+                isBright := (hsv.v > 0.2)  ; 亮度大于20%
+                if (isGreenHue && isSaturated && isBright)
                     return true
             } catch {
                 Sleep 5
@@ -1555,7 +1556,8 @@ IsResourceSufficient() {
     loop 5 {
         try {
             color := GetPixelRGB(coord.x, coord.y + (A_Index - 1), false)
-            if (!ColorDetector.IsGray(color))  ; 如果不是灰色，认为资源充足
+            Colorrange := Max(color.r, color.g, color.b) - Min(color.r, color.g, color.b)
+            if (Colorrange > 30)  ; 如果颜色差大于30，认为资源充足
                 return true
         } catch {
             Sleep 5
@@ -1622,39 +1624,37 @@ GetPixelRGB(x, y, useCache := true) {
 }
 
 /**
- * 颜色判断类
+ * RGB转HSV
  * @param {Integer} r - 红色分量 (0-255)
  * @param {Integer} g - 绿色分量 (0-255) 
  * @param {Integer} b - 蓝色分量 (0-255)
+ * @returns {Object} - 包含h,s,v的对象
  */
-class ColorDetector {
-    static IsBlue(color) {
-        return (color.b > color.r * 1.2 && 
-                color.b > color.g * 1.2 &&
-                color.b > 50)
+RGBToHSV(r, g, b) {
+    r := r / 255.0
+    g := g / 255.0
+    b := b / 255.0
+
+    max_val := Max(r, g, b)
+    min_val := Min(r, g, b)
+    diff := max_val - min_val
+
+    v := max_val
+
+    s := (max_val == 0) ? 0 : (diff / max_val)
+
+    h := 0
+    if (diff != 0) {
+        if (max_val == r) {
+            h := 60 * Mod((g - b) / diff, 6)
+        } else if (max_val == g) {
+            h := 60 * ((b - r) / diff + 2)
+        } else {
+            h := 60 * ((r - g) / diff + 4)
+        }
     }
 
-    static IsRed(color) {
-        return (color.r > 100 &&
-                color.r > color.g * 1.8 &&
-                color.r > color.b * 1.8 &&
-               (color.g + color.b) < color.r * 0.6)
-    }
-
-    static IsEnterred(color) {
-        return (color.r > 50 && color.r > (color.g + color.b) * 5)
-    }
-    
-    static IsGreen(color) {
-        return (color.g > color.r * 1.2 && 
-                color.g > color.b * 1.2 && 
-                color.g > 60)
-    }
-
-    static IsGray(color) {
-        range := Max(color.r, color.g, color.b) - Min(color.r, color.g, color.b)
-        return (range < 50 && Max(color.r, color.g, color.b) < 150)
-    }
+    return { h: h, s: s, v: v }
 }
 
 /**
@@ -1758,27 +1758,37 @@ class ConfigManager {
             IniWrite(rightData, this.settingsFile, section, "right")
             
             ; 保存功能键设置
-            dodgeData := uCtrl["dodge"]["key"].Value . "," . 
-                         uCtrl["dodge"]["enable"].Value . "," . 
-                         uCtrl["dodge"]["interval"].Value
-            IniWrite(dodgeData, this.settingsFile, section, "dodge")
+            if (uCtrl.Has("dodge")) {
+                dodgeData := uCtrl["dodge"]["key"].Value . "," . 
+                             uCtrl["dodge"]["enable"].Value . "," . 
+                             uCtrl["dodge"]["interval"].Value
+                IniWrite(dodgeData, this.settingsFile, section, "dodge")
+            }
 
-            potionData := uCtrl["potion"]["key"].Value . "," . 
-                          uCtrl["potion"]["enable"].Value . "," . 
-                          uCtrl["potion"]["interval"].Value
-            IniWrite(potionData, this.settingsFile, section, "potion")
+            if (uCtrl.Has("potion")) {
+                potionData := uCtrl["potion"]["key"].Value . "," . 
+                              uCtrl["potion"]["enable"].Value . "," . 
+                              uCtrl["potion"]["interval"].Value
+                IniWrite(potionData, this.settingsFile, section, "potion")
+            }
 
-            forceMoveData := uCtrl["forceMove"]["key"].Value . "," . 
-                             uCtrl["forceMove"]["enable"].Value . "," . 
-                             uCtrl["forceMove"]["interval"].Value
-            IniWrite(forceMoveData, this.settingsFile, section, "forceMove")
+            if (uCtrl.Has("forceMove")) {
+                forceMoveData := uCtrl["forceMove"]["key"].Value . "," . 
+                                 uCtrl["forceMove"]["enable"].Value . "," . 
+                                 uCtrl["forceMove"]["interval"].Value
+                IniWrite(forceMoveData, this.settingsFile, section, "forceMove")
+            }
 
             ipPauseData := uCtrl["ipPause"]["enable"].Value . "," . 
-                           uCtrl["ipPause"]["interval"].Value
+                           uCtrl["ipPause"]["interval"].Value . "," . 
+                           uCtrl["ipPause"]["pauseConfirm"].Value . "," . 
+                           uCtrl["ipPause"]["resumeConfirm"].Value
             IniWrite(ipPauseData, this.settingsFile, section, "ipPause")
 
             tabPauseData := uCtrl["tabPause"]["enable"].Value . "," . 
-                            uCtrl["tabPause"]["interval"].Value
+                            uCtrl["tabPause"]["interval"].Value . "," . 
+                            uCtrl["tabPause"]["pauseConfirm"].Value . "," . 
+                            uCtrl["tabPause"]["resumeConfirm"].Value
             IniWrite(tabPauseData, this.settingsFile, section, "tabPause")
 
             dcPauseData := uCtrl["dcPause"]["enable"].Value . "," . 
@@ -1789,14 +1799,13 @@ class ConfigManager {
                                  uCtrl["mouseAutoMove"]["interval"].Value
             IniWrite(mouseAutoMoveData, this.settingsFile, section, "mouseAutoMove")
             RandomData := uCtrl["random"]["enable"].Value . "," . 
-                          uCtrl["random"]["max"].Value
+                                 uCtrl["random"]["max"].Value
             IniWrite(RandomData, this.settingsFile, section, "random")
 
             IniWrite(RunMod.Value, this.settingsFile, section, "runMode")
             IniWrite(uCtrl["shift"]["enable"].Value, this.settingsFile, section, "shift")
             IniWrite(uCtrl["D4only"]["enable"].Value, this.settingsFile, section, "D4only")
-            IniWrite(uCtrl["xy"]["x"].Value, this.settingsFile, section, "xyX")
-            IniWrite(uCtrl["xy"]["y"].Value, this.settingsFile, section, "xyY")
+
             ; 保存热键设置
             IniWrite(startkey["mode"].Value, this.settingsFile, section, "hotkeyMode")
             IniWrite(startkey["userkey"][1].key, this.settingsFile, section, "useHotKey")
@@ -1818,15 +1827,21 @@ class ConfigManager {
             ; 加载
             section := profileName
 
-            for Index in [1, 2, 3, 4, 5]  {
-                skillData := IniRead(this.settingsFile, section, "skill" Index, Index . ",1,20,1")
+            loop 5 {
+                skillData := IniRead(this.settingsFile, section, "skill" A_Index, A_Index . ",1,20,1")
                 parts := StrSplit(skillData, ",")
                 
                 if (parts.Length >= 4) {
-                    cSkill[Index]["key"].Value := parts[1]
-                    cSkill[Index]["enable"].Value := Integer(parts[2])
-                    cSkill[Index]["interval"].Value := Integer(parts[3])
-                    cSkill[Index]["mode"].Value := Integer(parts[4])
+                    cSkill[A_Index]["key"].Value := parts[1]
+                    cSkill[A_Index]["enable"].Value := Integer(parts[2])
+                    cSkill[A_Index]["interval"].Value := Integer(parts[3])
+                    cSkill[A_Index]["mode"].Value := Integer(parts[4])
+                } else {
+                    ; 默认值
+                    cSkill[A_Index]["key"].Value := A_Index
+                    cSkill[A_Index]["enable"].Value := 1
+                    cSkill[A_Index]["interval"].Value := 20
+                    cSkill[A_Index]["mode"].Value := 1
                 }
             }
 
@@ -1836,6 +1851,10 @@ class ConfigManager {
                 mSkill["left"]["enable"].Value := Integer(leftParts[1])
                 mSkill["left"]["interval"].Value := Integer(leftParts[2])
                 mSkill["left"]["mode"].Value := Integer(leftParts[3])
+            } else {
+                mSkill["left"]["enable"].Value := 0
+                mSkill["left"]["interval"].Value := 80
+                mSkill["left"]["mode"].Value := 1
             }
             
             rightData := IniRead(this.settingsFile, section, "right", "1,300,1")
@@ -1844,45 +1863,58 @@ class ConfigManager {
                 mSkill["right"]["enable"].Value := Integer(rightParts[1])
                 mSkill["right"]["interval"].Value := Integer(rightParts[2])
                 mSkill["right"]["mode"].Value := Integer(rightParts[3])
+            } else {
+                mSkill["right"]["enable"].Value := 1
+                mSkill["right"]["interval"].Value := 300
+                mSkill["right"]["mode"].Value := 1
             }
 
-            
-            dodgeData := IniRead(this.settingsFile, section, "dodge", "Space,0,20")
-            dodgeParts := StrSplit(dodgeData, ",")
-            if (dodgeParts.Length >= 3) {
-                uCtrl["dodge"]["key"].Value := dodgeParts[1]
-                uCtrl["dodge"]["enable"].Value := Integer(dodgeParts[2])
-                uCtrl["dodge"]["interval"].Value := Integer(dodgeParts[3])
+            if (uCtrl.Has("dodge")) {
+                dodgeData := IniRead(this.settingsFile, section, "dodge", "Space,0,20")
+                dodgeParts := StrSplit(dodgeData, ",")
+                if (dodgeParts.Length >= 3) {
+                    uCtrl["dodge"]["key"].Value := dodgeParts[1]
+                    uCtrl["dodge"]["enable"].Value := Integer(dodgeParts[2])
+                    uCtrl["dodge"]["interval"].Value := Integer(dodgeParts[3])
+                }
             }
 
-            potionData := IniRead(this.settingsFile, section, "potion", "q,0,3000")
-            potionParts := StrSplit(potionData, ",")
-            if (potionParts.Length >= 3) {
-                uCtrl["potion"]["key"].Value := potionParts[1]
-                uCtrl["potion"]["enable"].Value := Integer(potionParts[2])
-                uCtrl["potion"]["interval"].Value := Integer(potionParts[3])
+            if (uCtrl.Has("potion")) {
+                potionData := IniRead(this.settingsFile, section, "potion", "q,0,3000")
+                potionParts := StrSplit(potionData, ",")
+                if (potionParts.Length >= 3) {
+                    uCtrl["potion"]["key"].Value := potionParts[1]
+                    uCtrl["potion"]["enable"].Value := Integer(potionParts[2])
+                    uCtrl["potion"]["interval"].Value := Integer(potionParts[3])
+                }
             }
 
-            forceMoveData := IniRead(this.settingsFile, section, "forceMove", "e,0,50")
-            forceMoveParts := StrSplit(forceMoveData, ",")
-            if (forceMoveParts.Length >= 3) {
-                uCtrl["forceMove"]["key"].Value := forceMoveParts[1]
-                uCtrl["forceMove"]["enable"].Value := Integer(forceMoveParts[2])
-                uCtrl["forceMove"]["interval"].Value := Integer(forceMoveParts[3])
+            if (uCtrl.Has("forceMove")) {
+                forceMoveData := IniRead(this.settingsFile, section, "forceMove", "e,0,50")
+                forceMoveParts := StrSplit(forceMoveData, ",")
+                if (forceMoveParts.Length >= 3) {
+                    uCtrl["forceMove"]["key"].Value := forceMoveParts[1]
+                    uCtrl["forceMove"]["enable"].Value := Integer(forceMoveParts[2])
+                    uCtrl["forceMove"]["interval"].Value := Integer(forceMoveParts[3])
+                }
             }
 
-            ipPauseData := IniRead(this.settingsFile, section, "ipPause", "0,50")
+            ipPauseData := IniRead(this.settingsFile, section, "ipPause", "0,50,2,2")
             ipPauseParts := StrSplit(ipPauseData, ",")
-            if (ipPauseParts.Length >= 2) {
+            if (ipPauseParts.Length >= 4) {
                 uCtrl["ipPause"]["enable"].Value := Integer(ipPauseParts[1])
                 uCtrl["ipPause"]["interval"].Value := Integer(ipPauseParts[2])
+                uCtrl["ipPause"]["pauseConfirm"].Value := Integer(ipPauseParts[3])
+                uCtrl["ipPause"]["resumeConfirm"].Value := Integer(ipPauseParts[4])
             }
 
-            tabPauseData := IniRead(this.settingsFile, section, "tabPause", "0,100")
+            tabPauseData := IniRead(this.settingsFile, section, "tabPause", "0,100,2,2")
             tabPauseParts := StrSplit(tabPauseData, ",")
-            if (tabPauseParts.Length >= 2) {
+            if (tabPauseParts.Length >= 4) {
                 uCtrl["tabPause"]["enable"].Value := Integer(tabPauseParts[1])
                 uCtrl["tabPause"]["interval"].Value := Integer(tabPauseParts[2])
+                uCtrl["tabPause"]["pauseConfirm"].Value := Integer(tabPauseParts[3])
+                uCtrl["tabPause"]["resumeConfirm"].Value := Integer(tabPauseParts[4])
             }
 
             dcPauseData := IniRead(this.settingsFile, section, "dcPause", "1,2")
@@ -1909,8 +1941,7 @@ class ConfigManager {
             RunMod.Value := IniRead(this.settingsFile, section, "runMode", "1")
             uCtrl["shift"]["enable"].Value := IniRead(this.settingsFile, section, "shift", "0")
             uCtrl["D4only"]["enable"].Value := IniRead(this.settingsFile, section, "D4only", "1")
-            uCtrl["xy"]["x"].Value := IniRead(this.settingsFile, section, "xyX", "0")
-            uCtrl["xy"]["y"].Value := IniRead(this.settingsFile, section, "xyY", "0")
+
             ; 加载全局热键
             startkey["mode"].Value := IniRead(this.settingsFile, section, "hotkeyMode", "1")
             startkey["userkey"][1].key := IniRead(this.settingsFile, section, "useHotKey", "F1")
@@ -1931,16 +1962,7 @@ class ConfigManager {
         profilesString := this.Read("Profiles", "List", this.defaultProfile)
         profileList := StrSplit(profilesString, "|")
         
-        found := false
-        for profile in profileList {
-            if (profile = this.defaultProfile) {
-                found := true
-                break
-            }
-        
-        }
-
-        if (!found) {
+        if (!InArray(profileList, this.defaultProfile)) {
             profileList.InsertAt(1, this.defaultProfile)
             this.Write("Profiles", "List", Join(profileList, "|"))
         }
@@ -1982,11 +2004,7 @@ class ConfigManager {
     
     static ProfileExists(profileName) {
         profileList := this.GetProfileList()
-        for profile in profileList {
-            if (profile = profileName)
-                return true
-        }
-        return false
+        return InArray(profileList, profileName)
     }
     
     /**
@@ -2095,7 +2113,6 @@ class ConfigManager {
         profileList := this.GetProfileList()
         currentProfileName := profileList[profileName.Value]
         if (currentProfileName = this.defaultProfile) {
-            this.DeleteSection(this.defaultProfile)
             this.LoadSelectedProfile(this.defaultProfile)
             statusBar.Text := "默认配置以重置"
             return
@@ -2129,15 +2146,42 @@ class ConfigManager {
 }
 
 /**
+ * 检查值是否在数组中
+ * @param {Array} arr - 要搜索的数组
+ * @param {Any} val - 要查找的值
+ * @returns {Boolean} - 如果值在数组中则返回true，否则返回false
+ */
+InArray(arr, val) {
+    if (arr.Length == 0)
+        return false
+
+    for i, v in arr {
+        if (v == val)
+            return true
+    }
+    return false
+}
+
+/**
  * 将数组元素用指定分隔符连接
  * @param {Array} arr - 要连接的数组
  * @param {String} delimiter - 分隔符
  * @returns {String} - 连接后的字符串
  */
 Join(arr, delimiter := ",") {
+    if (arr.Length == 0)
+        return ""
+
+    if (arr.Length == 1)
+        return arr[1]
+
     result := ""
+    arrLen := arr.Length
+
     for i, v in arr {
-        result .= (i > 1 ? delimiter : "") . v
+        result .= v
+        if (i < arrLen)
+            result .= delimiter
     }
     return result
 }
