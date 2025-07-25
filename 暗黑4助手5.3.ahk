@@ -1,4 +1,4 @@
-#Requires AutoHotkey v2.0
+﻿#Requires AutoHotkey v2.0
 #SingleInstance Force
 ProcessSetPriority "High"
 
@@ -44,7 +44,7 @@ InitializeGUI() {
     global myGui, statusBar
 
     ;# ==================== GUI基础设置 ==================== #
-    myGui := Gui("", "暗黑4助手 v5.2")
+    myGui := Gui("", "暗黑4助手 v5.3")
     myGui.BackColor := "FFFFFF"                    ; 背景色设为白色
     myGui.SetFont("s10", "Microsoft YaHei UI")    ; 设置默认字体
 
@@ -507,10 +507,12 @@ UpdateStatus(status, barText) {
  * 启动定时器
  */
 StartAllTimers() {
-    global cSkill, mSkill, uCtrl, RunMod, keyQueue, skillTimers, pauseConfig
+    global cSkill, mSkill, uCtrl, RunMod, skillTimers, pauseConfig
+
     for reason, config in pauseConfig {
         config.state := false
     }
+
     if (uCtrl["D4only"]["enable"].Value == 1) {
         CoordManager()
         if (uCtrl["mouseAutoMove"]["enable"].Value) {
@@ -528,8 +530,7 @@ StartAllTimers() {
         skillTimers := Map()
 
     if (RunMod.Value = 2) {
-        keyQueue := []
-        SetTimer(KeyQueueWorker, 10)
+        KeyQueueManager.StartQueue()
     }
 
     ; ===== 技能按键 =====
@@ -561,7 +562,7 @@ StopAllTimers() {
     global skillTimers, RunMod, uCtrl
 
     if (RunMod.Value = 2) {
-        SetTimer(KeyQueueWorker, 0)
+        KeyQueueManager.StopQueue()
     }
 
     if (IsSet(skillTimers)) {
@@ -583,7 +584,7 @@ StopAllTimers() {
  * 重置所有变量
  */
 ReleaseAllKeys() {
-    global holdStates, uCtrl
+    global holdStates, uCtrl, RunMod
 
     if IsSet(holdStates){
         for uniqueKey, _ in holdStates {
@@ -604,10 +605,6 @@ ReleaseAllKeys() {
             }
         }
         holdStates.Clear()
-    }
-
-    if IsSet(keyQueue) {
-        keyQueue := []
     }
 
     if uCtrl["shift"]["enable"].Value {
@@ -780,167 +777,162 @@ HandleKeyMode(keyData) {
 
 ; ==================== 队列模式实现 ====================
 /**
- * 键位入队函数
+ * 按键队列管理器类
  * @param {Object} keyData
  */
-EnqueueKey(keyData) {
-    global keyQueue
-    static maxLen := 10
-
-    uniqueKey := keyData.uniqueKey
-    priority := GetPriority(keyData.mode, keyData.id)
-    now := A_TickCount
-    existingIndex := 0
-    loop keyQueue.Length {
-        if (keyQueue[A_Index].uniqueKey = uniqueKey) {
-            existingIndex := A_Index
-            break
-        }
-    }
-
-    item := {
-        key: keyData.key,
-        mode: keyData.mode,
-        interval: keyData.interval,
-        id: keyData.id,
-        isMouse: keyData.isMouse,
-        uniqueKey: keyData.uniqueKey,
-        category: keyData.category,
-        timerKey: keyData.timerKey,
-        time: now,
-        priority: priority
-    }
-
-    if (keyData.HasProp("Coord")) {
-        item.Coord := keyData.Coord
-    }
-
-    if (existingIndex > 0)
-        keyQueue.RemoveAt(existingIndex)
-
-    if (keyQueue.Length >= maxLen) {
-        lowestPriority := priority
-        lowestIndex := 0
-
-        loop keyQueue.Length {
-            idx := A_Index
-            qItem := keyQueue[idx]
-            if (qItem.priority < lowestPriority || 
-               (qItem.priority == lowestPriority && qItem.time < (lowestIndex ? keyQueue[lowestIndex].time : 0))) {
-                lowestPriority := qItem.priority
-                lowestIndex := idx
-            }
-        }
-        
-        if (lowestIndex > 0 && priority >= lowestPriority)
-            keyQueue.RemoveAt(lowestIndex)
-        else if (existingIndex == 0)
-            return
-    }
-
-    if (keyQueue.Length == 0) {
-        keyQueue.Push(item)
-        return
-    }
-
-    left := 1
-    right := keyQueue.Length
-
-    firstPriority := keyQueue[1].priority
-    lastPriority := keyQueue[right].priority
-
-    if (priority > firstPriority) {
-        keyQueue.InsertAt(1, item)
-        return
-    }
-    if (priority <= lastPriority) {
-        keyQueue.Push(item)
-        return
-    }
-
-    while (right - left > 1) {
-        mid := (left + right) >> 1
-        midItem := keyQueue[mid]
-        if (priority > midItem.priority || 
-           (priority == midItem.priority && now > midItem.time))
-            right := mid
-        else
-            left := mid
-    }
-
-    keyQueue.InsertAt(right, item)
-}
-
-/**
-; 优先级计算函数
-* @param {Integer} mode - 按键模式
-* @param {String} identifier - 按键标识符
-*/
-GetPriority(mode, identifier := "") {
-    switch mode {
-        case 4: return 4
-        case 2: return 3
-        case 3: return 2
-        case 1: 
-            if (identifier = "dodge" || identifier = "potion" || identifier = "forceMove") {
-                return 5
-            }
-            return 1
-        default: return 0
-    }
-}
-
-/**
- * 队列处理器
- * @description 处理队列中的按键事件
- */
-KeyQueueWorker() {
-    global keyQueue, holdStates
+class KeyQueueManager {
+    static keyQueue := []
     static lastExec := Map()
     static critSection := false
-    
-    if IsObject(keyQueue) && keyQueue.Length = 0
-        return
+    static maxLen := 10
+    static QueueTimer := ""
+    ; 启动队列模式
+    static StartQueue() {
+        this.QueueTimer := (*) => this.KeyQueueWorker()
+        SetTimer(this.QueueTimer, 10)
+    }
+    ; 停止队列模式
+    static StopQueue() {
+        SetTimer(this.QueueTimer, 0)
+        this.QueueTimer := unset
+        this.ClearQueue()
+    }
 
-    now := A_TickCount
-    pendingItems := []
-    remainingItems := []
-
-    if (critSection)
-        return
-    critSection := true
-
-    loop keyQueue.Length {
-        item := keyQueue[A_Index]
-        uniqueKey := item.uniqueKey
-        lastExecTime := lastExec.Get(uniqueKey, 0)
-
-        if (item.mode == 3) {
-            if (IsSet(holdStates) && holdStates.Has(uniqueKey) && holdStates[uniqueKey]) {
-                continue
+    /**
+     * 键位入队函数
+     * @param {Object} keyData - 按键数据
+     */
+    static EnqueueKey(keyData) {
+        uniqueKey := keyData.uniqueKey
+        priority := this.GetPriority(keyData.mode, keyData.id)
+        now := A_TickCount
+        existingIndex := 0
+        for index, item in this.keyQueue {
+            if (item.uniqueKey = uniqueKey) {
+                existingIndex := index
+                break
             }
-            
-            HandleKeyMode(item)
-            lastExec[uniqueKey] := now
-            continue
         }
 
-        if ((now - lastExecTime) >= item.interval) {
-            HandleKeyMode(item)
-            lastExec[uniqueKey] := now
-            pendingItems.Push(item)
-        } else {
-            remainingItems.Push(item)
+        item := {
+            key: keyData.key,
+            mode: keyData.mode,
+            interval: keyData.interval,
+            id: keyData.id,
+            isMouse: keyData.isMouse,
+            uniqueKey: keyData.uniqueKey,
+            category: keyData.category,
+            timerKey: keyData.timerKey,
+            time: now,
+            priority: priority
+        }
+
+        if (keyData.HasProp("Coord")) {
+            item.Coord := keyData.Coord
+        }
+
+        if (existingIndex > 0)
+            this.keyQueue.RemoveAt(existingIndex)
+
+        if (this.keyQueue.Length >= KeyQueueManager.maxLen) {
+            this.keyQueue.RemoveAt(this.keyQueue.Length)
+        }
+
+        if (this.keyQueue.Length == 0) {
+            this.keyQueue.Push(item)
+            return
+        }
+
+        inserted := false
+        loop this.keyQueue.Length {
+            if (priority > this.keyQueue[A_Index].priority) {
+                this.keyQueue.InsertAt(A_Index, item)
+                inserted := true
+                break
+            }
+        }
+
+        if (!inserted) {
+            this.keyQueue.Push(item)
         }
     }
 
-    keyQueue := remainingItems
-    critSection := false
-
-    for item in pendingItems {
-        if (item.mode != 3) {
-            EnqueueKey(item)
+    /**
+     * 优先级计算函数
+     * @param {Integer} mode - 按键模式
+     * @param {String} identifier - 按键标识符
+     * @returns {Integer} 优先级数值
+     */
+    static GetPriority(mode, identifier := "") {
+        switch mode {
+            case 4: return 4
+            case 2: return 3
+            case 3: return 2
+            case 1: 
+                if (identifier = "dodge" || identifier = "potion" || identifier = "forceMove") {
+                    return 5
+                }
+                return 1
+            default: return 0
         }
+    }
+
+    /**
+     * 队列处理器
+     * @description 处理队列中的按键事件
+     */
+    static KeyQueueWorker() {
+        global holdStates
+        if !(this.keyQueue is Array) || this.keyQueue.Length == 0
+            return
+
+        if this.critSection
+            return
+
+        this.critSection := true
+        now := A_TickCount
+        pendingItems := []
+        remainingItems := []
+        for item in this.keyQueue {
+            uniqueKey := item.uniqueKey
+            lastExecTime := this.lastExec.Get(uniqueKey, 0)
+
+            if (item.mode == 3) {
+                if (IsSet(holdStates) && holdStates.Has(uniqueKey) && holdStates[uniqueKey]) {
+                    continue
+                }
+                
+                HandleKeyMode(item)
+                this.lastExec[uniqueKey] := now
+                continue
+            }
+
+            if ((now - lastExecTime) >= item.interval) {
+                HandleKeyMode(item)
+                this.lastExec[uniqueKey] := now
+                pendingItems.Push(item)
+            } else {
+                remainingItems.Push(item)
+            }
+        }
+
+        this.keyQueue := remainingItems
+        this.critSection := false
+
+        for item in pendingItems {
+            if (item.mode != 3) {
+                this.EnqueueKey(item)
+            }
+        }
+    }
+
+    /**
+     * 清空队列
+     */
+    static ClearQueue() {
+        this.keyQueue := []
+        this.lastExec.Clear()
+        this.critSection := false
     }
 }
 
@@ -1016,7 +1008,7 @@ PressKeyCallback(category, identifier) {
         skillTimers[keyData.timerKey] := boundFunc
         SetTimer(boundFunc, keyData.interval)
     } else if (RunMod.Value == 2) {
-        EnqueueKey(keyData)
+        KeyQueueManager.EnqueueKey(keyData)
     }
 }
 
