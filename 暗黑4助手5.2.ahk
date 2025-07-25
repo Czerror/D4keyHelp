@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 #SingleInstance Force
 ProcessSetPriority "High"
 
@@ -1100,16 +1100,10 @@ CoordManager() {
 
     ; 使用预定义的坐标配置
     static coordConfig := Map(
-        "monster_blood_top", {x: 1605, y: 85},
-        "monster_blood_bottom", {x: 1605, y: 95},
-        "boss_blood_top", {x: 1435, y: 85},
-        "boss_blood_bottom", {x: 1435, y: 95},
-        "monster_ui_top", {x: 1590, y: 75},
-        "monster_ui_bottom", {x: 1590, y: 100},
-        "boss_ui_top", {x: 1425, y: 75},
-        "boss_ui_bottom", {x: 1425, y: 115},
+        "monster_blood", {x: 1605, y: 90},
+        "boss_blood", {x: 1435, y: 95},
         "skill_bar_blue", {x: 1540, y: 1885},
-        "tab_interface_red", {x: 3795, y: 90},
+        "tab_interface_red", {x: 3790, y: 95},
         "dialog_gray_bg", {x: 150, y: 2070},
         "resource_bar", {x: 2620, y: 1875}
     )
@@ -1222,7 +1216,7 @@ CheckPauseByEnter(allcoords, pixelCache := unset) {
             colorObj := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
                 pixelCache[key] : GetPixelRGB(coord.x, coord.y)
 
-            if (colorDetector.IsEnterred(colorObj)) {
+            if (colorDetector.IsRed(colorObj)) {
                 return true
             }
         }
@@ -1241,56 +1235,38 @@ CheckPauseByEnter(allcoords, pixelCache := unset) {
  */
 CheckBoss(allcoords, pixelCache := unset) {
     try {
-        coords := [
-            allcoords["boss_ui_top"],      ; UI顶部
-            allcoords["boss_ui_bottom"],   ; UI底部
-            allcoords["boss_blood_top"],   ; 血条顶部
-            allcoords["boss_blood_bottom"] ; 血条底部
-        ]
+        baseCoord := allcoords["boss_blood"]
 
-        colors := []
-        for coord in coords {
-            key := coord.x . "," . coord.y
-            
+        hitCount := 0
+
+        loop 8 {
+            offsetX := Random(-2, 2)
+            offsetY := Random(-2, 2)
+
+            sampleX := baseCoord.x + offsetX
+            sampleY := baseCoord.y + offsetY
+
+            key := sampleX . "," . sampleY
+
             color := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
-                pixelCache[key] : GetPixelRGB(coord.x, coord.y)
-            
+                pixelCache[key] : GetPixelRGB(sampleX, sampleY)
+
             if (IsSet(pixelCache)) {
                 pixelCache[key] := color
             }
-            
-            colors.Push(color)
-        }
 
-        ; 检查UI部分颜色范围
-        for i in [1, 2] {
-            try {
-                color := colors[i]
-                if (!ColorDetector.IsGray(color))
-                    return false
-            } catch {
-                return false
-            }
-        }
-
-        ; 检查血条部分红色主导
-        for i in [3, 4] {
-            try {
-                color := colors[i]
-                if (ColorDetector.IsRed(color))
+            if (ColorDetector.IsRed(color)) {
+                hitCount++
+                if (hitCount >= 4) {
                     return true
-            } catch {
-                return false
+                }
             }
         }
-        
         return false
-
     } catch as err {
         return false
     }
 }
-
 
 /**
  * 检测monster血条
@@ -1299,51 +1275,34 @@ CheckBoss(allcoords, pixelCache := unset) {
  */
 CheckMonster(allcoords, pixelCache := unset) {
     try {
-        coords := [
-            allcoords["monster_ui_top"],      ; UI顶部
-            allcoords["monster_ui_bottom"],   ; UI底部
-            allcoords["monster_blood_top"],   ; 血条顶部
-            allcoords["monster_blood_bottom"] ; 血条底部
-        ]
+        baseCoord := allcoords["monster_blood"]
 
-        colors := []
-        for coord in coords {
-            key := coord.x . "," . coord.y
-            
+        hitCount := 0
+
+        loop 8 {
+            offsetX := Random(-2, 2)
+            offsetY := Random(-2, 2)
+
+            sampleX := baseCoord.x + offsetX
+            sampleY := baseCoord.y + offsetY
+
+            key := sampleX . "," . sampleY
+
             color := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
-                pixelCache[key] : GetPixelRGB(coord.x, coord.y)
+                pixelCache[key] : GetPixelRGB(sampleX, sampleY)
 
             if (IsSet(pixelCache)) {
                 pixelCache[key] := color
             }
-            
-            colors.Push(color)
-        }
 
-        ; 检查UI部分颜色范围
-        for i in [1, 2] {
-            try {
-                color := colors[i]
-                if (!ColorDetector.IsGray(color))
-                    return false
-            } catch {
-                return false
-            }
-        }
-
-        ; 检查血条部分红色主导
-        for i in [3, 4] {
-            try {
-                color := colors[i]
-                if (ColorDetector.IsRed(color))
+            if (ColorDetector.IsRed(color)) {
+                hitCount++
+                if (hitCount >= 4) {
                     return true
-            } catch {
-                return false
+                }
             }
         }
-        
         return false
-
     } catch as err {
         return false
     }
@@ -1628,32 +1587,34 @@ GetPixelRGB(x, y, useCache := true) {
  * @param {Integer} b - 蓝色分量 (0-255)
  */
 class ColorDetector {
+    ; 蓝色检测
     static IsBlue(color) {
-        return (color.b > color.r * 1.2 && 
+        return (color.b > 60 &&
+                color.b > color.r * 1.2 && 
                 color.b > color.g * 1.2 &&
-                color.b > 50)
+                color.b - Max(color.r, color.g) > 30)
     }
-
+    ; 红色检测
     static IsRed(color) {
-        return (color.r > 100 &&
-                color.r > color.g * 1.8 &&
-                color.r > color.b * 1.8 &&
-               (color.g + color.b) < color.r * 0.6)
+        return (color.r > 60 &&
+                color.r > color.g * 1.2 &&
+                color.r > color.b * 3 &&
+                color.r - Max(color.g, color.b) > 40)
     }
-
-    static IsEnterred(color) {
-        return (color.r > 50 && color.r > (color.g + color.b) * 5)
-    }
-    
+    ; 绿色检测
     static IsGreen(color) {
-        return (color.g > color.r * 1.2 && 
-                color.g > color.b * 1.2 && 
-                color.g > 60)
+        return (color.g > 70 &&
+                color.g > color.r * 1.3 && 
+                color.g > color.b * 3 &&
+                color.g - Max(color.r, color.b) > 40)
     }
-
+    ; 灰色检测
     static IsGray(color) {
         range := Max(color.r, color.g, color.b) - Min(color.r, color.g, color.b)
-        return (range < 50 && Max(color.r, color.g, color.b) < 150)
+        avgColor := (color.r + color.g + color.b) / 3
+        return (range < 35 &&
+                avgColor > 10 && 
+                avgColor < 80)
     }
 }
 
