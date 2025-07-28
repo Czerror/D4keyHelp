@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 #SingleInstance Force
 ProcessSetPriority "High"
 
@@ -84,17 +84,10 @@ InitializeGUI() {
 ;| 功能: 创建主程序界面及所有控件
 ;|===============================================================|
 CreateMainGUI() {
-    global myGui, statusText, startkey, ProfileName, RunMod, hotkeyText
+    global myGui, startkey, ProfileName, hotkeyText , tabControl
 
     ;# ==================== 主控制区域 ==================== #
     hotkeyText := myGui.AddGroupBox("x10 y10 w280 h120", "启动热键: 自定义 - F1")
-    myGui.AddText("x180 y103 w30 h20", "模式: ")
-    statusText := myGui.AddText("x30 y35 w80 h20", "状态: 未运行")
-    checkstart := myGui.AddButton("x30 y63 w85 h30", "开始/停止")
-    checkstart.OnEvent("Click", (*) => 
-    ToggleMacro()
-    TogglePause("window", true)
-    )
 
     ;# ==================== 热键控制区域 ==================== #
     startkey := Map(
@@ -117,9 +110,6 @@ CreateMainGUI() {
         LoadStartHotkey(startkey)
     ))
 
-    ;# ==================== 运行模式选择 ==================== #
-    RunMod := myGui.AddDropDownList("x215 y100 w65 h60 Choose1", ["多线程", "单线程"])
-
     ;# ==================== 配置管理区域 ==================== #
     myGui.AddGroupBox("x300 y10 w175 h120", "配置管理")
     profileName := myGui.AddComboBox("x310 y30 w160 h120 Choose1", ["默认"])
@@ -132,10 +122,34 @@ CreateMainGUI() {
     myGui.AddButton("x410 y100 w60 h25", "删除").OnEvent("Click", (*) => (
         ConfigManager.DeleteProfileFromUI()
     ))
+    ;# ==================== Tab 控件 ==================== #
+    tabControl := myGui.AddTab("x10 y135 w465 h360 Choose1", ["战斗模式", "工具模式"])
+    ; 创建 Tab1 (按键设置) 的控件
+    tabControl.UseTab(2)
+}
+
+;|===============================================================|
+;| 函数: CreateAllControls
+;| 功能: 创建主界面所有GUI控件并初始化配置
+;|===============================================================|
+CreateAllControls() {
+    global myGui, cSkill, mSkill, uCtrl, skillMod, tabControl, statusText, RunMod
+
+    cSkill := Map()
+    mSkill := Map()
+    uCtrl := Map()
+    skillMod := ["连点", "BUFF", "按住", "资源"]
+    tabControl.UseTab(1)
+    ;# ==================== 运行模式选择 ==================== #
+    statusText := myGui.AddText("x30 y35 w80 h20", "状态: 未运行")
+    myGui.AddButton("x30 y63 w85 h30", "开始/停止").OnEvent("Click", (*) => 
+    ToggleMacro()
+    TogglePause("window", true)
+    )
+    myGui.AddText("x180 y103 w30 h20", "模式: ")
+    RunMod := myGui.AddDropDownList("x215 y100 w65 h60 Choose1", ["多线程", "单线程"])
 
     ;# ==================== 按键设置主区域 ==================== #
-    myGui.AddGroupBox("x10 y135 w465 h360", "按键设置")
-
    ; 添加列标题
     myGui.AddText("x35 y160 w100 h20", "技能与按键")
     myGui.AddText("x133 y160 w60 h20", "启用")
@@ -145,19 +159,6 @@ CreateMainGUI() {
     ;|----------------------- 自动启停 -----------------------|
     myGui.AddGroupBox("x325 y160 w140 h230", "启停管理")
     myGui.AddButton("x335 y340 w120 h25", "刷新检测").OnEvent("Click", RefreshDetection)
-}
-
-;|===============================================================|
-;| 函数: CreateAllControls
-;| 功能: 创建主界面所有GUI控件并初始化配置
-;|===============================================================|
-CreateAllControls() {
-    global myGui, cSkill, mSkill, uCtrl, skillMod
-
-    cSkill := Map()
-    mSkill := Map()
-    uCtrl := Map()
-    skillMod := ["连点", "BUFF", "按住", "资源"]
 
     ;|----------------------- 技能配置 -----------------------|
     loop 5 {
@@ -296,6 +297,45 @@ CreateAllControls() {
         "interval", myGui.AddEdit("x420 y460 w45 h20", "1000"),
         "currentPoint", 1  ; 移动点位标记
     )
+    ; 切换到工具模式
+    tabControl.UseTab(2)
+    uCtrl["PM"] := Map(
+        "mod", myGui.AddDropDownList("x90 y178 w60 h60 Choose1", ["暗金", "传奇"]),
+        "trueTime", myGui.AddEdit("x270 y178 w40 h20", "125"),
+        "nettime", myGui.AddEdit("x390 y178 w40 h20", "70"),
+        "time", 0,
+        "time1", myGui.AddEdit("x90 y210 w300 h20", "0"),
+        "timeX", myGui.AddEdit("x90 y240 w300 h20", "0"),
+        "correct", myGui.AddEdit("x120 y270 w20 h20", "1"),
+        "xiuValue", myGui.AddEdit("x120 y300 w20 h20", "1")
+    )
+    
+    uCtrl["PM"]["time1"].Enabled := false
+    uCtrl["PM"]["timeX"].Enabled := false
+    uCtrl["PM"]["correct"].OnEvent("LoseFocus", (*) => (
+        LimitEditValue(uCtrl["PM"]["correct"], 1, 5)
+    ))
+    uCtrl["PM"]["xiuValue"].OnEvent("LoseFocus", (*) => (
+        LimitEditValue(uCtrl["PM"]["xiuValue"], 1, 5)
+    ))
+    myGui.AddText("x30 y180 w60 h20", "精造模式:")
+    myGui.AddText("x180 y180 w90 h20", "窗口周期(ms):")
+    myGui.AddText("x330 y180 w60 h20", "网络延迟: ")
+    myGui.AddText("x30 y210 w60 h20", "记录时间:")
+    myGui.AddText("x30 y240 w60 h20", "时间偏差:")
+    myGui.AddText("x30 y270 w90 h20", "实际命中词条:")
+    myGui.AddText("x30 y300 w90 h20", "期望命中词条:")
+    myGui.AddButton("x30 y330 w60 h40", "开始").OnEvent("Click", (*) => PmMod("start"))
+    myGui.AddButton("x110 y330 w60 h40", "继续").OnEvent("Click", (*) => PmMod("next"))
+    myGui.AddButton("x200 y330 w60 h40", "重置").OnEvent("Click", (*) => PmMod("reset"))
+    ;|---------------------- 窗口置顶选项 ------------------------|
+    uCtrl["alwaysOnTop"] := Map(
+        "text", myGui.AddText("x30 y98 w60 h20", "窗口置顶:"),
+        "enable", myGui.AddCheckbox("x90 y100 w15 h15")
+    )
+    ; 绑定事件，当勾选状态改变时切换窗口置顶属性
+    uCtrl["alwaysOnTop"]["enable"].OnEvent("Click", (*) => ToggleAlwaysOnTop())
+    tabControl.UseTab()
 }
 
 /**
@@ -330,6 +370,24 @@ LimitEditValue(ctrl, min, max) {
         ctrl.Value := min
     }
     return
+}
+
+/**
+ * 切换窗口置顶状态
+ */
+ToggleAlwaysOnTop(*) {
+    global myGui, uCtrl
+    try {
+        if (uCtrl["alwaysOnTop"]["enable"].Value = 1) {
+            ; 设置窗口置顶
+            WinSetAlwaysOnTop(true, myGui.Hwnd)
+        } else {
+            ; 取消窗口置顶
+            WinSetAlwaysOnTop(false, myGui.Hwnd)
+        }
+    } catch as err {
+        OutputDebug "切换窗口置顶状态失败: " err.Message
+    }
 }
 
 /**
@@ -784,7 +842,7 @@ class KeyQueueManager {
     static keyQueue := []
     static lastExec := Map()
     static critSection := false
-    static maxLen := 10
+    static maxLen := 15
     static QueueTimer := ""
     ; 启动队列模式
     static StartQueue() {
@@ -891,40 +949,39 @@ class KeyQueueManager {
 
         this.critSection := true
         now := A_TickCount
-        pendingItems := []
-        remainingItems := []
-        for item in this.keyQueue {
+        i := this.keyQueue.Length
+        while (i >= 1) {
+            item := this.keyQueue[i]
             uniqueKey := item.uniqueKey
             lastExecTime := this.lastExec.Get(uniqueKey, 0)
 
             if (item.mode == 3) {
                 if (IsSet(holdStates) && holdStates.Has(uniqueKey) && holdStates[uniqueKey]) {
+                    i--
                     continue
                 }
                 
                 HandleKeyMode(item)
                 this.lastExec[uniqueKey] := now
+                i--
                 continue
             }
 
             if ((now - lastExecTime) >= item.interval) {
                 HandleKeyMode(item)
                 this.lastExec[uniqueKey] := now
-                pendingItems.Push(item)
-            } else {
-                remainingItems.Push(item)
+                ; 对于非按住模式的按键，重新入队
+                if (item.mode != 3) {
+                    this.keyQueue.RemoveAt(i)
+                    this.EnqueueKey(item)
+                }
             }
+            i--
         }
-
-        this.keyQueue := remainingItems
+        
         this.critSection := false
-
-        for item in pendingItems {
-            if (item.mode != 3) {
-                this.EnqueueKey(item)
-            }
-        }
     }
+
 
     /**
      * 清空队列
@@ -1084,10 +1141,18 @@ GetWindowInfo() {
  */
 CoordManager() {
     global allcoords
-    
 
-    windowInfo := GetWindowInfo()
+    static lastWindowInfo := unset
+    currentWindowInfo := GetWindowInfo()
 
+    if (IsSet(lastWindowInfo) && IsSet(allcoords)) {
+        if (lastWindowInfo["D4W"] == currentWindowInfo["D4W"] && 
+            lastWindowInfo["D4H"] == currentWindowInfo["D4H"]) {
+            return allcoords
+        }
+    }
+
+    lastWindowInfo := currentWindowInfo.Clone()
     allcoords := Map()
 
     ; 使用预定义的坐标配置
@@ -1101,14 +1166,14 @@ CoordManager() {
     )
 
     for name, coord in coordConfig {
-        allcoords[name] := Convert(coord, windowInfo)
+        allcoords[name] := Convert(coord, currentWindowInfo)
     }
 
     loop 6 {
         allcoords["dialog_red_btn_" A_Index] := Convert({
             x: 50 + 90 * (A_Index - 1), 
             y: 1440
-        }, windowInfo)
+        }, currentWindowInfo)
     }
 
     static mouseMoveRatios := [
@@ -1119,11 +1184,10 @@ CoordManager() {
     loop 6 {
         ratio := mouseMoveRatios[A_Index]
         allcoords["mouse_move_" A_Index] := Convert({
-            x: Round(ratio.x * windowInfo["D44KW"]), 
-            y: Round(ratio.y * windowInfo["D44KH"])
-        }, windowInfo)
+            x: Round(ratio.x * currentWindowInfo["D44KW"]), 
+            y: Round(ratio.y * currentWindowInfo["D44KH"])
+        }, currentWindowInfo)
     }
-    
     return allcoords
 }
 
@@ -1151,6 +1215,103 @@ Convert(coord, windowInfo := unset) {
     return { x: x, y: y }
 }
 
+; 高精度计时器
+GetPreciseTime() {
+    static freq := 0
+    static counter := 0
+    if (freq = 0) {
+        DllCall("QueryPerformanceFrequency", "Int64*", &freq)
+    }
+    DllCall("QueryPerformanceCounter", "Int64*", &counter)
+    return (counter * 1000000) // freq
+}
+
+
+PmCoord(){
+    static Pm := Map(
+        "Up", {x: 970, y: 1835},
+        "res", {x: 865, y: 725},
+        "fix", {x: 540, y: 1900},
+        "skip", {x: 690, y: 1650}
+    )
+    PmCoord := Map()
+    for key, coord in Pm {
+        PmCoord[key] := Convert(coord)
+    }
+    return PmCoord
+}
+
+PmMod(ctrl){
+    global uCtrl
+
+    if WinExist("ahk_class Diablo IV Main Window Class") {
+        WinActivate
+    }
+
+    coord := PmCoord()
+
+    mode := uCtrl["PM"]["mod"].Value
+    truetime := uCtrl["PM"]["trueTime"].Value * 1000  ; 窗口期:125ms
+    totalPhases := (mode = 1) ? 4 : 5
+    needtime := truetime * totalPhases ; 完整周期时间:暗金500ms，传奇625ms
+    correct := uCtrl["PM"]["correct"].Value
+    xiuValue := uCtrl["PM"]["xiuValue"].Value
+    
+    if (ctrl == "start") {
+        MouseMove(coord["Up"].x, coord["Up"].y, 0)
+        Loop 3 {
+            Click
+            Sleep 130
+        }
+        startTime := GetPreciseTime()
+        Click
+        uCtrl["PM"]["time1"].Value := FormatTime(, "HH:mm:ss") . "." . Format("{:03}", Mod(Round(startTime/1000), 1000))
+        uCtrl["PM"]["time"] := startTime
+    } else if (ctrl == "next") {
+        startTime := uCtrl["PM"]["time"]
+        
+        ; 前3次点击
+        MouseMove(coord["Up"].x, coord["Up"].y, 0)
+        Loop 3 {
+            Click
+            Sleep 130
+        }
+        currentTime := GetPreciseTime()
+        elapsedTime := currentTime - startTime
+        currentPhase := Mod(elapsedTime, needtime)
+        targetCenter := Mod((xiuValue - correct) * truetime + (truetime / 2), needtime)
+        waitTime := Mod(targetCenter - currentPhase + needtime, needtime)
+        if (waitTime < 50000) {
+            waitTime += needtime
+        }
+
+        targetTime := currentTime + waitTime
+        while (targetTime > GetPreciseTime()) {
+            Sleep 0
+        }
+        Click
+        endTime := GetPreciseTime()
+        
+        ; 验证结果
+        totalElapsed := endTime - startTime
+        finalPhase := Mod(totalElapsed, needtime)
+        actualWindow := Floor(finalPhase / truetime) + 1
+        
+        ; 计算偏差
+        targetWindowStart := (xiuValue - 1) * truetime
+        targetWindowCenter := targetWindowStart + (truetime / 2)
+        phaseDeviation := finalPhase - targetWindowCenter
+        uCtrl["PM"]["timeX"].Value := "总耗时:" . Floor(totalElapsed/1000) . "ms 实际窗口:" . actualWindow . "/" . xiuValue . " 偏差: " . Round(phaseDeviation/1000) . "ms"
+    } else if (ctrl == "reset") {
+        ; 重置所有时间记录
+        uCtrl["PM"]["time"] := 0
+        uCtrl["PM"]["time1"].Value := 0
+        uCtrl["PM"]["timeX"].Value := 0
+        uCtrl["PM"]["correct"].Value := 1
+        uCtrl["PM"]["xiuValue"].Value := 1
+        return
+    }    
+}
 
 ; ==================== 像素检测与暂停机制 ====================
 /**
@@ -1526,7 +1687,7 @@ GetPixelRGB(x, y, useCache := true) {
     static pixelCache := Map()
     static cacheLifetime := 50
     static lastCacheClear := 0
-    static maxCacheEntries := 80
+    static maxCacheEntries := 100
     
     if (!useCache) {
         try {
@@ -1547,7 +1708,7 @@ GetPixelRGB(x, y, useCache := true) {
     
     if (currentTime - lastCacheClear > 150) {
         if (pixelCache.Count > maxCacheEntries) {
-            pixelCache.Clear()
+            pixelCache := Map()
         }
         lastCacheClear := currentTime
     }

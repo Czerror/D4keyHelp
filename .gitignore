@@ -7,3 +7,5 @@
 *.txt
 *.json
 *dev*
+.lingma
+.rules
