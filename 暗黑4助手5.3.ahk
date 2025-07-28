@@ -302,7 +302,7 @@ CreateAllControls() {
     uCtrl["PM"] := Map(
         "mod", myGui.AddDropDownList("x90 y178 w60 h60 Choose1", ["暗金", "传奇"]),
         "trueTime", myGui.AddEdit("x270 y178 w40 h20", "125"),
-        "nettime", myGui.AddEdit("x390 y178 w40 h20", "70"),
+        "nettime", myGui.AddEdit("x390 y178 w40 h20", "0"),
         "time", 0,
         "time1", myGui.AddEdit("x90 y210 w300 h20", "0"),
         "timeX", myGui.AddEdit("x90 y240 w300 h20", "0"),
@@ -1254,6 +1254,7 @@ PmMod(ctrl){
     truetime := uCtrl["PM"]["trueTime"].Value * 1000  ; 窗口期:125ms
     totalPhases := (mode = 1) ? 4 : 5
     needtime := truetime * totalPhases ; 完整周期时间:暗金500ms，传奇625ms
+    nettime := uCtrl["PM"]["nettime"].Value / 2 * 1000
     correct := uCtrl["PM"]["correct"].Value
     xiuValue := uCtrl["PM"]["xiuValue"].Value
     
@@ -1279,13 +1280,13 @@ PmMod(ctrl){
         currentTime := GetPreciseTime()
         elapsedTime := currentTime - startTime
         currentPhase := Mod(elapsedTime, needtime)
-        targetCenter := Mod((xiuValue - correct) * truetime + (truetime / 2), needtime)
+        targetCenter := Mod((xiuValue - correct) * truetime + (truetime // 3), needtime)
         waitTime := Mod(targetCenter - currentPhase + needtime, needtime)
         if (waitTime < 50000) {
             waitTime += needtime
         }
 
-        targetTime := currentTime + waitTime
+        targetTime := currentTime + waitTime - nettime
         while (targetTime > GetPreciseTime()) {
             Sleep 0
         }
@@ -1299,8 +1300,8 @@ PmMod(ctrl){
         
         ; 计算偏差
         targetWindowStart := (xiuValue - 1) * truetime
-        targetWindowCenter := targetWindowStart + (truetime / 2)
-        phaseDeviation := finalPhase - targetWindowCenter
+        targetWindowCenter := targetWindowStart + (truetime // 3)
+        phaseDeviation := finalPhase - targetWindowCenter + nettime
         uCtrl["PM"]["timeX"].Value := "总耗时:" . Floor(totalElapsed/1000) . "ms 实际窗口:" . actualWindow . "/" . xiuValue . " 偏差: " . Round(phaseDeviation/1000) . "ms"
     } else if (ctrl == "reset") {
         ; 重置所有时间记录
