@@ -86,10 +86,8 @@ InitializeGUI() {
 CreateMainGUI() {
     global myGui, startkey, ProfileName, hotkeyText , tabControl
 
-    ;# ==================== 主控制区域 ==================== #
-    hotkeyText := myGui.AddGroupBox("x10 y10 w280 h120", "启动热键: 自定义 - F1")
-
     ;# ==================== 热键控制区域 ==================== #
+    hotkeyText := myGui.AddGroupBox("x10 y10 w280 h120", "启动热键: 自定义 - F1")
     startkey := Map(
         "mode", myGui.AddDropDownList("x310 y65 w65 h90 Choose1", ["自定义", "侧键1", "侧键2"]),
         "userkey", [
@@ -301,7 +299,7 @@ CreateAllControls() {
     tabControl.UseTab(2)
     uCtrl["PM"] := Map(
         "mod", myGui.AddDropDownList("x90 y178 w60 h60 Choose1", ["暗金", "传奇"]),
-        "trueTime", myGui.AddEdit("x270 y178 w40 h20", "125"),
+        "trueTime", myGui.AddEdit("x270 y178 w40 h20", "120"),
         "nettime", myGui.AddEdit("x390 y178 w40 h20", "0"),
         "time", 0,
         "time1", myGui.AddEdit("x90 y210 w300 h20", "0"),
@@ -320,7 +318,7 @@ CreateAllControls() {
     ))
     myGui.AddText("x30 y180 w60 h20", "精造模式:")
     myGui.AddText("x180 y180 w90 h20", "窗口周期(ms):")
-    myGui.AddText("x330 y180 w60 h20", "网络延迟: ")
+    myGui.AddText("x330 y180 w60 h20", "偏差修正:")
     myGui.AddText("x30 y210 w60 h20", "记录时间:")
     myGui.AddText("x30 y240 w60 h20", "时间偏差:")
     myGui.AddText("x30 y270 w90 h20", "实际命中词条:")
@@ -732,7 +730,6 @@ RefreshDetection(*) {
     ManageTimers(true)
     UpdateStatus("运行中", "已强制重置")
 }
-
 
 ; ==================== 按键与技能处理 ====================
 /**
@@ -1249,20 +1246,24 @@ PmMod(ctrl){
     }
 
     coord := PmCoord()
-
+    nettime := uCtrl["PM"]["nettime"].Value * 1000
     mode := uCtrl["PM"]["mod"].Value
     truetime := uCtrl["PM"]["trueTime"].Value * 1000  ; 窗口期:125ms
     totalPhases := (mode = 1) ? 4 : 5
     needtime := truetime * totalPhases ; 完整周期时间:暗金500ms，传奇625ms
-    nettime := uCtrl["PM"]["nettime"].Value / 2 * 1000
     correct := uCtrl["PM"]["correct"].Value
     xiuValue := uCtrl["PM"]["xiuValue"].Value
     
     if (ctrl == "start") {
+        if WinExist("ahk_class Diablo IV Main Window Class") {
+            WinActivate
+        }
+        Sleep 150
         MouseMove(coord["Up"].x, coord["Up"].y, 0)
+        Sleep 150
         Loop 3 {
             Click
-            Sleep 130
+            Sleep 150
         }
         startTime := GetPreciseTime()
         Click
@@ -1280,9 +1281,9 @@ PmMod(ctrl){
         currentTime := GetPreciseTime()
         elapsedTime := currentTime - startTime
         currentPhase := Mod(elapsedTime, needtime)
-        targetCenter := Mod((xiuValue - correct) * truetime + (truetime // 3), needtime)
+        targetCenter := Mod((xiuValue - correct) * truetime + (truetime / 5), needtime)
         waitTime := Mod(targetCenter - currentPhase + needtime, needtime)
-        if (waitTime < 50000) {
+        if (waitTime < truetime / 2) {
             waitTime += needtime
         }
 
@@ -1296,15 +1297,20 @@ PmMod(ctrl){
         ; 验证结果
         totalElapsed := endTime - startTime
         finalPhase := Mod(totalElapsed, needtime)
-        actualWindow := Floor(finalPhase / truetime) + 1
-        
+    
+        ; 计算实际命中的固定相位编号
+        phaseIndex := Floor(finalPhase / truetime)
+        actualFixedPhase := Mod(correct + phaseIndex - 1, totalPhases) + 1
+
+        ; 计算目标相位中心点
+        targetCenter := Mod((xiuValue - correct) * truetime + (truetime / 5), needtime)
+    
         ; 计算偏差
-        targetWindowStart := (xiuValue - 1) * truetime
-        targetWindowCenter := targetWindowStart + (truetime // 3)
-        phaseDeviation := finalPhase - targetWindowCenter + nettime
-        uCtrl["PM"]["timeX"].Value := "总耗时:" . Floor(totalElapsed/1000) . "ms 实际窗口:" . actualWindow . "/" . xiuValue . " 偏差: " . Round(phaseDeviation/1000) . "ms"
+        phaseDeviation := finalPhase - targetCenter + nettime
+        uCtrl["PM"]["timeX"].Value := "总耗时:" . Floor(totalElapsed/1000) . "ms 实际窗口:" . actualFixedPhase . "/" . xiuValue " 偏差: " . Round(phaseDeviation/1000) . "ms"
     } else if (ctrl == "reset") {
         ; 重置所有时间记录
+        uCtrl["PM"]["nettime"].Value := 0
         uCtrl["PM"]["time"] := 0
         uCtrl["PM"]["time1"].Value := 0
         uCtrl["PM"]["timeX"].Value := 0
