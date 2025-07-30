@@ -300,7 +300,7 @@ CreateAllControls() {
     uCtrl["PM"] := Map(
         "mod", myGui.AddDropDownList("x90 y178 w60 h60 Choose1", ["暗金", "传奇"]),
         "trueTime", myGui.AddEdit("x270 y178 w40 h20", "120"),
-        "nettime", myGui.AddEdit("x390 y178 w40 h20", "0"),
+        "modtime", myGui.AddEdit("x390 y178 w40 h20", "0"),
         "time", 0,
         "time1", myGui.AddEdit("x90 y210 w300 h20", "0"),
         "timeX", myGui.AddEdit("x90 y240 w300 h20", "0"),
@@ -1246,7 +1246,7 @@ PmMod(ctrl){
     }
 
     coord := PmCoord()
-    nettime := uCtrl["PM"]["nettime"].Value * 1000
+    modtime := uCtrl["PM"]["modtime"].Value * 1000
     mode := uCtrl["PM"]["mod"].Value
     truetime := uCtrl["PM"]["trueTime"].Value * 1000  ; 窗口期:125ms
     totalPhases := (mode = 1) ? 4 : 5
@@ -1287,7 +1287,7 @@ PmMod(ctrl){
             waitTime += needtime
         }
 
-        targetTime := currentTime + waitTime - nettime
+        targetTime := currentTime + waitTime - modtime
         while (targetTime > GetPreciseTime()) {
             Sleep 0
         }
@@ -1306,7 +1306,7 @@ PmMod(ctrl){
         targetCenter := Mod((xiuValue - correct) * truetime + (truetime / 5), needtime)
     
         ; 计算偏差
-        phaseDeviation := finalPhase - targetCenter + nettime
+        phaseDeviation := finalPhase - targetCenter + modtime
         uCtrl["PM"]["timeX"].Value := "总耗时:" . Floor(totalElapsed/1000) . "ms 实际窗口:" . actualFixedPhase . "/" . xiuValue " 偏差: " . Round(phaseDeviation/1000) . "ms"
     } else if (ctrl == "reset") {
         ; 重置所有时间记录
