@@ -1,4 +1,4 @@
-#Requires AutoHotkey v2.0
+﻿#Requires AutoHotkey v2.0
 #SingleInstance Force
 ProcessSetPriority "High"
 
@@ -1696,9 +1696,9 @@ class PauseDetector {
     static tabResumeHitCount := 0
     static enterPauseMissCount := 0
     static enterResumeHitCount := 0
-    static CheckWindowTimer := 0 ; 窗口检测定时器句柄
-    static BloodDetectTimer := 0 ; 血条检测定时器句柄
-    static TabDetectTimer := 0 ; TAB界面检测定时器句柄
+    static CheckWindowTimer := "" ; 窗口检测定时器句柄
+    static BloodDetectTimer := "" ; 血条检测定时器句柄
+    static TabDetectTimer := "" ; TAB界面检测定时器句柄
     ; 检测阈值常量
     static PAUSE_THRESHOLD := 2
     static RESUME_THRESHOLD := 2
@@ -1721,37 +1721,39 @@ class PauseDetector {
         }
         
         ; 启动窗口检测定时器
-        SetTimer(this.CheckWindowTimer, 100)
+        
         if (!enable) {
-            if (this.HasOwnProp("CheckWindowTimer")) {
+            if (this.CheckWindowTimer != "") {
                 SetTimer(this.CheckWindowTimer, 0)
             }
-            if (this.HasOwnProp("BloodDetectTimer")) {
+            if (this.BloodDetectTimer != "") {
                 SetTimer(this.BloodDetectTimer, 0)
             }
-            if (this.HasOwnProp("TabDetectTimer")) {
+            if (this.TabDetectTimer != "") {
                 SetTimer(this.TabDetectTimer, 0)
             }
             this.ResetCounters()
-        }
-        ; 启动血条检测定时器
-        if (blood) {
-            actualInterval := (
-                GUIManager.uCtrl.Has("ipPause") && GUIManager.uCtrl["ipPause"].Has("interval")
-                    ? Integer(GUIManager.uCtrl["ipPause"]["interval"].Value)
-                    : 50
-            )
-            SetTimer(this.BloodDetectTimer, actualInterval)
-        }
+        } else {
+            SetTimer(this.CheckWindowTimer, 100) ; 启动窗口检测定时器
+            ; 启动血条检测定时器
+            if (blood) {
+                actualInterval := (
+                    GUIManager.uCtrl.Has("ipPause") && GUIManager.uCtrl["ipPause"].Has("interval")
+                        ? Integer(GUIManager.uCtrl["ipPause"]["interval"].Value)
+                        : 50
+                )
+                SetTimer(this.BloodDetectTimer, actualInterval)
+            }
         
-        ; 启动TAB界面检测定时器
-        if (tab) {
-            actualInterval := (
-                GUIManager.uCtrl.Has("tabPause") && GUIManager.uCtrl["tabPause"].Has("interval")
-                    ? Integer(GUIManager.uCtrl["tabPause"]["interval"].Value)
-                    : 100
-            )
-            SetTimer(this.TabDetectTimer, actualInterval)
+            ; 启动TAB界面检测定时器
+            if (tab) {
+                actualInterval := (
+                    GUIManager.uCtrl.Has("tabPause") && GUIManager.uCtrl["tabPause"].Has("interval")
+                        ? Integer(GUIManager.uCtrl["tabPause"]["interval"].Value)
+                        : 100
+                )
+                SetTimer(this.TabDetectTimer, actualInterval)
+            }
         }
     }
     /**
@@ -1764,9 +1766,9 @@ class PauseDetector {
         this.tabResumeHitCount := 0
         this.enterPauseMissCount := 0
         this.enterResumeHitCount := 0
-        this.CheckWindowTimer := 0 ; 窗口检测定时器句柄
-        this.BloodDetectTimer := 0 ; 血条检测定时器句柄
-        this.TabDetectTimer := 0 ; TAB界面检测定时器句柄
+        this.CheckWindowTimer := "" ; 窗口检测定时器句柄
+        this.BloodDetectTimer := "" ; 血条检测定时器句柄
+        this.TabDetectTimer := "" ; TAB界面检测定时器句柄
     }
     /**
      * 窗口切换检查函数
