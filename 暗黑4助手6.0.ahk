@@ -546,7 +546,9 @@ class MacroController {
         } else {
             PauseDetector.ManageTimers(false)
             this.StopAllTimers()
-            this.pauseConfig.Clone()
+            for reason, config in this.pauseConfig {
+                config.state := false
+            }
             GUIManager.UpdateStatus("已停止", "宏已停止")
         }
     }
@@ -726,18 +728,6 @@ class KeyHandler {
     }
 
     /**
-     * 获取技能坐标（按需计算）
-     * @param {Object} keyData - 按键数据
-     * @returns {Object|Boolean} - 坐标对象或false
-     */
-    static GetKeyCoords(keyData) {
-        if (keyData.mode == 2) {  ; 只有BUFF模式需要坐标
-            return this.GetSkillCoords(keyData.id)
-        }
-        return false
-    }
-
-    /**
      * 通用按键处理
      * @param {Object} keyData - 按键数据
      */
@@ -747,17 +737,11 @@ class KeyHandler {
 
         switch keyData.mode {
             case 2: ; BUFF模式
-                coord := this.GetKeyCoords(keyData)
-                if (coord) {
-                    if (this.IsSkillActive(keyData.id, coord))
-                        return
+                if (this.IsSkillActive(keyData.id)) {
+                    return
                 } else {
-                    if (this.IsSkillActive(keyData.id))
-                        return
+                    this._ExecuteKey(keyData, shiftEnabled)
                 }
-
-                this._ExecuteKey(keyData, shiftEnabled)
-
             case 3: ; 按住模式
                 if (!this.holdStates.Has(uniqueKey) || !this.holdStates[uniqueKey]) {
                     this.holdStates[uniqueKey] := true
@@ -765,11 +749,11 @@ class KeyHandler {
                     if (this.IsMouse(keyData)) {
                         if (shiftEnabled)
                             Send "{Blind}{Shift down}"
-                        Click("down " keyData.key)
+                            Click("down " keyData.key)
                     } else {
                         if (shiftEnabled)
                             Send "{Blind}{Shift down}"
-                        Send("{" keyData.key " down}")
+                            Send("{" keyData.key " down}")
                     }
                 }
 
@@ -813,16 +797,16 @@ class KeyHandler {
     /**
      * 通用按键回调函数
      * @param {String} category - 类别 ("skill", "mouse", "uSkill")
-     * @param {String|Integer} identifier - 标识符
+     * @param {String|Integer} id - 标识符
      */
-    static PressKeyCallback(category, identifier) {
+    static PressKeyCallback(category, id) {
         ; 获取配置
-        config := this._GetConfig(category, identifier)
+        config := this._GetConfig(category, id)
         if (!config)
             return
 
         ; 构建按键数据
-        keyData := this._BuildKeyData(category, identifier, config)
+        keyData := this._BuildKeyData(category, id, config)
         if (!keyData)
             return
 
@@ -837,7 +821,6 @@ class KeyHandler {
 
         ; 执行按键处理
         if (GUIManager.RunMod.Value == 1) {
-            ; 创建一个闭包函数来正确传递keyData参数
             timerFunc := () => this.HandleKeyMode(keyData)
             this.skillTimers[keyData.uniqueKey] := timerFunc
             SetTimer(timerFunc, keyData.interval)
@@ -849,23 +832,23 @@ class KeyHandler {
     /**
      * 获取配置信息
      * @param {String} category - 类别
-     * @param {String|Integer} identifier - 标识符
+     * @param {String|Integer} id - 标识符
      * @returns {Object|Boolean} - 配置对象或false
      */
-    static _GetConfig(category, identifier) {
+    static _GetConfig(category, id) {
         switch category {
             case "skill":
-                if (!GUIManager.cSkill.Has(identifier) || GUIManager.cSkill[identifier]["enable"].Value != 1)
+                if (!GUIManager.cSkill.Has(id) || GUIManager.cSkill[id]["enable"].Value != 1)
                     return false
-                return GUIManager.cSkill[identifier]
+                return GUIManager.cSkill[id]
             case "mouse":
-                if (!GUIManager.mSkill.Has(identifier) || GUIManager.mSkill[identifier]["enable"].Value != 1)
+                if (!GUIManager.mSkill.Has(id) || GUIManager.mSkill[id]["enable"].Value != 1)
                     return false
-                return GUIManager.mSkill[identifier]
+                return GUIManager.mSkill[id]
             case "uSkill":
-                if (!GUIManager.uCtrl.Has(identifier) || GUIManager.uCtrl[identifier]["enable"].Value != 1)
+                if (!GUIManager.uCtrl.Has(id) || GUIManager.uCtrl[id]["enable"].Value != 1)
                     return false
-                return GUIManager.uCtrl[identifier]
+                return GUIManager.uCtrl[id]
             default:
                 return false
         }
@@ -874,16 +857,16 @@ class KeyHandler {
     /**
      * 构建按键数据对象
      * @param {String} category - 类别
-     * @param {String|Integer} identifier - 标识符
+     * @param {String|Integer} id - 标识符
      * @param {Object} config - 配置对象
      * @returns {Object|Boolean} - 按键数据对象或false
      */
-    static _BuildKeyData(category, identifier, config) {
+    static _BuildKeyData(category, id, config) {
         isMouse := (category = "mouse")
-        key := isMouse ? identifier : config["key"].Value
+        key := isMouse ? id : config["key"].Value
         mode := config.Has("mode") ? config["mode"].Value : 1
         interval := Integer(config["interval"].Value)
-        
+        coord := this.GetSkillCoords(id)
         ; 生成唯一键（同时作为定时器键使用）
         uniqueKey := (isMouse ? "mouse:" : "key:") . key
 
@@ -892,7 +875,8 @@ class KeyHandler {
             mode: mode,                       ; 操作模式
             interval: interval,               ; 执行间隔
             uniqueKey: uniqueKey,             ; 唯一键（兼定时器键）
-            id: identifier                    ; 标识符（BUFF模式需要）
+            id: id,                   ; 标识符（BUFF模式需要）
+            coord: coord                      ; 坐标（如果适用）
         }
      
         ; D4only模式下模式调整
@@ -1066,15 +1050,19 @@ class KeyQueueManager {
     static QueueTimer := unset
     ; 启动队列模式
     static StartQueue() {
-        this.QueueTimer := (*) => this.KeyQueueWorker()
-        SetTimer(this.QueueTimer, 10)
+        if (!this.HasProp("QueueTimer")) {
+            this.QueueTimer := ObjBindMethod(this, "KeyQueueWorker")
+            SetTimer(this.QueueTimer, 10)
+        }
     }
+    
     ; 停止队列模式
     static StopQueue() {
-            this.QueueTimer := (*) => this.KeyQueueWorker()
+        if (this.HasProp("QueueTimer")) {
             SetTimer(this.QueueTimer, 0)
             this.QueueTimer := unset
             this.ClearQueue()
+        }
     }
 
     /**
@@ -1136,16 +1124,16 @@ class KeyQueueManager {
     /**
      * 优先级计算函数
      * @param {Integer} mode - 按键模式
-     * @param {String} identifier - 按键标识符
+     * @param {String} id - 按键标识符
      * @returns {Integer} 优先级数值
      */
-    static GetPriority(mode, identifier := "") {
+    static GetPriority(mode, id := "") {
         switch mode {
             case 4: return 4
             case 2: return 3
             case 3: return 2
             case 1: 
-                if (identifier = "dodge" || identifier = "potion" || identifier = "forceMove") {
+                if (id = "dodge" || id = "potion" || id = "forceMove") {
                     return 5
                 }
                 return 1
@@ -1158,7 +1146,6 @@ class KeyQueueManager {
      * @description 处理队列中的按键事件
      */
     static KeyQueueWorker() {
-        global holdStates
         if !(this.keyQueue is Array) || this.keyQueue.Length == 0
             return
 
@@ -1174,7 +1161,7 @@ class KeyQueueManager {
             lastExecTime := this.lastExec.Get(uniqueKey, 0)
 
             if (item.mode == 3) {
-                if (IsSet(holdStates) && holdStates.Has(uniqueKey) && holdStates[uniqueKey]) {
+                if (KeyHandler.holdStates.Has(uniqueKey) && KeyHandler.holdStates[uniqueKey]) {
                     i--
                     continue
                 }
@@ -1418,8 +1405,8 @@ class WindowManager {
      * 重置所有缓存
      */
     static ResetCache() {
-        this.coordCache := Map()
-        this.windowInfo := Map()
+        this.coordCache.Clear()
+        this.windowInfo.Clear()
         this.lastWindowInfo := unset
         this.D4State := false
     }
@@ -1543,7 +1530,7 @@ class PerfectCraftingManager {
         coord := this.GetCoordinates()
         
         Sleep(this.PREP_DELAY)
-        MouseMove(coord["Up"].x, coord["Up"].y, 0)
+        MouseMove(coord["Up"].x, coord["Up"].y)
         Sleep(this.PREP_DELAY)
         
         ; 前3次准备点击
@@ -1567,13 +1554,14 @@ class PerfectCraftingManager {
      * 执行继续流程
      */
     static ExecuteNext() {
+        this.ActivateD4Window()
         config := this.GetCraftingConfig()
         timing := this.CalculateTiming(config)
         coord := this.GetCoordinates()
         startTime := GUIManager.uCtrl["PM"]["time"]
         
         ; 前3次点击
-        MouseMove(coord["Up"].x, coord["Up"].y, 0)
+        MouseMove(coord["Up"].x, coord["Up"].y)
         Loop 3 {
             Click
             Sleep(this.CLICK_DELAY)
@@ -1712,9 +1700,9 @@ class PauseDetector {
         blood := GUIManager.uCtrl["ipPause"]["enable"].Value
         tab := GUIManager.uCtrl["tabPause"]["enable"].Value
         ; 定时器管理属性
-        this.CheckWindowTimer := (*) => this.CheckWindow()     ; 窗口检测定时器
-        this.BloodDetectTimer := (*) => this.AutoPauseByBlood()     ; 血条检测定时器 
-        this.TabDetectTimer := (*) => this.AutoPauseByTAB() ; TAB界面检测定时器
+        this.CheckWindowTimer := ObjBindMethod(this, "CheckWindow")     ; 窗口检测定时器
+        this.BloodDetectTimer := ObjBindMethod(this, "AutoPauseByBlood")     ; 血条检测定时器
+        this.TabDetectTimer := ObjBindMethod(this, "AutoPauseByTAB") ; TAB界面检测定时器
         if (!d4only) {
             blood := false
             tab := false
@@ -2068,7 +2056,7 @@ GetPixelRGB(x, y, useCache := true) {
     
     if (currentTime - lastCacheClear > 150) {
         if (pixelCache.Count > maxCacheEntries) {
-            pixelCache := Map()
+            pixelCache.Clear()
         }
         lastCacheClear := currentTime
     }
@@ -2465,7 +2453,7 @@ class ConfigManager {
     static EnsureConfigFile() {
         if (!FileExist(this.settingsFile)) {
             try {
-                defaultContent := "[Profiles]`nList=" this.defaultProfile "`n`n[Global]`nLastUsedProfile=" this.defaultProfile "`n`n"
+                defaultContent := "[Profiles]`nList=" . this.defaultProfile . "`n`n[Global]`nLastUsedProfile=" . this.defaultProfile . "`n`n"
                 FileAppend(defaultContent, this.settingsFile)
                 return true
             } catch {
@@ -2628,7 +2616,7 @@ DebugLog(message) {
             }
 
             timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
-            FileAppend timestamp " - " message "`n", logFile
+            FileAppend(timestamp . " - " . message . "`n", logFile)
         } catch as err {
             OutputDebug "日志写入失败: " err.Message
         }
@@ -2650,7 +2638,7 @@ DebugLog(message) {
     if (currentTime - lastClickTime < 400) {
         MacroController.TogglePause("doubleClick", true)
         confirmTime := GUIManager.uCtrl["dcPause"]["interval"] ? GUIManager.uCtrl["dcPause"]["interval"].Value : 2
-        SetTimer(() => MacroController.TogglePause("doubleClick", false), -confirmTime * 1000)
+        SetTimer(ObjBindMethod(MacroController, "TogglePause", "doubleClick", false), -confirmTime * 1000)
         lastClickTime := 0
     } else {
         lastClickTime := currentTime
