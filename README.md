@@ -73,6 +73,7 @@
 
 #### 工具模式标签页
 包含精造模式和窗口置顶功能。
+
 <img width="732" height="843" alt="wechat_2025-08-02_004510_837" src="https://github.com/user-attachments/assets/cd48b618-1d12-4dd0-bbb1-69a8ae1175de" />
 
 ---
