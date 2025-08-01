@@ -49,7 +49,7 @@
 ## 🖥️ 界面介绍
 
 ### 主界面布局
-
+<img width="732" height="843" alt="wechat_2025-08-02_004503_994" src="https://github.com/user-attachments/assets/99e565f9-7090-4262-920e-c1f6a566bbb8" />
 #### 启动热键区域（左上）
 - **模式选择**：自定义/侧键1/侧键2
 - **自定义热键**：当选择自定义模式时可设置热键
@@ -73,6 +73,7 @@
 
 #### 工具模式标签页
 包含精造模式和窗口置顶功能。
+<img width="732" height="843" alt="wechat_2025-08-02_004510_837" src="https://github.com/user-attachments/assets/cd48b618-1d12-4dd0-bbb1-69a8ae1175de" />
 
 ---
 
