@@ -2142,7 +2142,7 @@ class ColorDetector {
     static IsGray(color) {
         range := Max(color.r, color.g, color.b) - Min(color.r, color.g, color.b)
         avgColor := (color.r + color.g + color.b) / 3
-        return (range < 35 &&
+        return (range < 40 &&
                 avgColor > 10 && 
                 avgColor < 80)
     }
