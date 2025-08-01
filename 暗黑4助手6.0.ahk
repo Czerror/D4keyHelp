@@ -2,9 +2,7 @@
 #SingleInstance Force
 ProcessSetPriority "High"
 
-; ========== 全局变量定义 ==========
-; 核心状态变量
-global DEBUG := false               ; 启用调试模式
+global DEBUG := false
 global debugLogFile := A_ScriptDir "\debugd4.log"
 
 /**
@@ -14,51 +12,37 @@ global debugLogFile := A_ScriptDir "\debugd4.log"
  * @author Archenemy
  */
 class GUIManager {
-    ; 静态属性 - 存储GUI对象和控件
-    static myGui := ""                ; 主GUI对象
-    static statusBar := ""            ; 状态栏
-    static tabControl := ""           ; 选项卡控件
-    static hotkeyText := ""           ; 热键文本
-    static statusText := ""           ; 状态文本
-    static startkey := Map()          ; 启动热键配置
-    static cSkill := Map()            ; 技能配置
-    static mSkill := Map()            ; 鼠标按键配置
-    static uCtrl := Map()             ; 功能控件配置
-    static RunMod := ""               ; 运行模式
-    static skillMod := []             ; 技能模式选项
-    static profileName := ""          ; 配置名称控件
+    static myGui := ""          ; 主GUI窗口
+    static statusBar := ""      ; 状态栏
+    static tabControl := ""     ; 标签页控件
+    static hotkeyText := ""     ; 启动热键文本
+    static statusText := ""     ; 状态文本
+    static startkey := Map()    ; 启动热键配置
+    static cSkill := Map()      ; 技能控件
+    static mSkill := Map()      ; 鼠标控件
+    static uCtrl := Map()       ; 用户控件
+    static RunMod := ""         ; 运行模式
+    static skillMod := []       ; 技能模式
+    static profileName := ""    ; 配置文件
     
     /**
      * 初始化GUI界面
      * 创建主窗口、托盘菜单和所有控件
      */
     static Initialize() {
-        ; GUI基础设置
         this.myGui := Gui("", "暗黑4助手 v6.0")
         this.myGui.BackColor := "FFFFFF"
         this.myGui.SetFont("s10", "Microsoft YaHei UI")
-        
-        ; 系统托盘菜单
         this.InitializeTrayMenu()
-        
-        ; 窗口事件绑定
         this.myGui.OnEvent("Escape", (*) => this.myGui.Minimize())
         this.myGui.OnEvent("Close", (*) => (
             ConfigManager.SaveProfileFromUI(),
             ExitApp()
         ))
-        
-        ; 界面构建
         this.CreateMainFrame()
         this.CreateAllControls()
-        
-        ; 状态栏
         this.statusBar := this.myGui.AddStatusBar(, "就绪")
-        
-        ; 窗口显示
         this.myGui.Show("w485 h535")
-        
-        ; 配置初始化
         ConfigManager.Initialize()
     }
     
@@ -66,11 +50,11 @@ class GUIManager {
      * 初始化系统托盘菜单
      */
     static InitializeTrayMenu() {
-        A_TrayMenu.Delete()  ; 清空默认菜单
+        A_TrayMenu.Delete()
         A_TrayMenu.Add("显示主界面", (*) => this.myGui.Show())
-        A_TrayMenu.Add()  ; 分隔线
+        A_TrayMenu.Add()
         A_TrayMenu.Add("开始/停止宏", (*) => MacroController.ToggleMacro())
-        A_TrayMenu.Add()  ; 分隔线
+        A_TrayMenu.Add()
         A_TrayMenu.Add("退出", (*) => (
             ConfigManager.SaveProfileFromUI(),
             ExitApp()
@@ -82,29 +66,24 @@ class GUIManager {
      * 创建主界面框架
      */
     static CreateMainFrame() {
-        ; 热键控制区域
         this.hotkeyText := this.myGui.AddGroupBox("x10 y10 w280 h120", "启动热键: 自定义 - F1")
         this.startkey := Map(
             "mode", this.myGui.AddDropDownList("x310 y65 w65 h90 Choose1", ["自定义", "侧键1", "侧键2"]),
             "userkey", [
-                {key: "F1", input: true},       ; 自定义按键
-                {key: "XButton1", input: false}, ; 鼠标侧键1
-                {key: "XButton2", input: false}  ; 鼠标侧键2
+                {key: "F1", input: true},
+                {key: "XButton1", input: false},
+                {key: "XButton2", input: false}
             ],
             "guiHotkey", this.myGui.AddHotkey("x380 y65 w90 h22")
         )
-        
         this.startkey["mode"].OnEvent("Change", (*) => (
-            this.LoadStartHotkey()
+            HotkeyManager.LoadStartHotkey()
         ))
-        
         this.startkey["guiHotkey"].OnEvent("Change", (*) => (
             (this.startkey["guiHotkey"].Value = "") && (this.startkey["guiHotkey"].Value := "F1"),
             this.startkey["userkey"][1].key := this.startkey["guiHotkey"].Value,
-            this.LoadStartHotkey()
+            HotkeyManager.LoadStartHotkey()
         ))
-        
-        ; 配置管理区域
         this.myGui.AddGroupBox("x300 y10 w175 h120", "配置管理")
         this.profileName := this.myGui.AddComboBox("x310 y30 w160 h120 Choose1", ["默认"])
         this.profileName.OnEvent("Change", (ctrl, *) => (
@@ -116,10 +95,8 @@ class GUIManager {
         this.myGui.AddButton("x410 y100 w60 h25", "删除").OnEvent("Click", (*) => (
             ConfigManager.DeleteProfileFromUI()
         ))
-        
-        ; Tab 控件
         this.tabControl := this.myGui.AddTab("x10 y135 w465 h360 Choose1", ["战斗模式", "工具模式"])
-        this.tabControl.UseTab(2)  ; 切换到工具模式Tab
+        this.tabControl.UseTab(2)
     }
     
     /**
@@ -131,28 +108,21 @@ class GUIManager {
         this.uCtrl := Map()
         this.skillMod := ["连点", "BUFF", "按住", "资源"]
         
-        ; 切换到战斗模式Tab
         this.tabControl.UseTab(1)
         
         ; 运行模式选择
         this.CreateRunningControls()
-        
-        ; 按键设置主区域
+        ; 技能控件
         this.CreateSkillControls()
-        
         ; 自动启停区域
         this.CreateAutoStopControls()
-        
-        ; 切换到工具模式Tab
+        ; 工具模式
         this.tabControl.UseTab(2)
-        
-        ; 创建精造模式控件
+        ; 精造模式控件
         this.CreatePerfectModeControls()
-        
-        ; 窗口置顶选项
+        ; 窗口置顶控件
         this.CreateWindowTopControls()
         
-        ; 重置Tab选择
         this.tabControl.UseTab()
     }
     
@@ -179,20 +149,18 @@ class GUIManager {
      * 创建技能控件
      */
     static CreateSkillControls() {
-        ; 添加列标题
+
         this.myGui.AddText("x35 y160 w100 h20", "技能与按键")
         this.myGui.AddText("x133 y160 w60 h20", "启用")
         this.myGui.AddText("x180 y160 w80 h20", "间隔(毫秒)")
         this.myGui.AddText("x252 y160 w80 h20", "运行策略")
         
-        ; 技能配置
         loop 5 {
             yPos := 190 + (A_Index - 1) * 30
             
             ; 技能标签
             this.myGui.AddText("x30 y" yPos " w40 h20", "技能" A_Index ":")
             
-            ; 技能配置Map
             this.cSkill[A_Index] := Map(
                 "key", this.myGui.AddHotkey("x80 y" yPos " w30 h20", A_Index),
                 "enable", this.myGui.AddCheckbox("x125 y" yPos " w45 h20", "启用"),
@@ -210,7 +178,6 @@ class GUIManager {
             "mode", this.myGui.AddDropDownList("x250 y338 w60 h120 Choose1", this.skillMod)
         )
         
-        ; 右键配置
         this.mSkill["right"] := Map(
             "text", this.myGui.AddText("x30 y370 w40 h20", "右键:"),
             "key", "RButton",  ; 固定键值
@@ -266,7 +233,7 @@ class GUIManager {
         )
         
         this.uCtrl["random"]["max"].OnEvent("LoseFocus", (*) => (
-            this.LimitEditValue(this.uCtrl["random"]["max"], 1, 10)))
+            UtilityHelper.LimitEditValue(this.uCtrl["random"]["max"], 1, 10)))
     }
     
     /**
@@ -274,7 +241,6 @@ class GUIManager {
      */
     static CreateAutoStopControls() {
         this.myGui.AddGroupBox("x325 y160 w140 h230", "启停管理")
-        this.myGui.AddButton("x335 y340 w120 h25", "刷新检测").OnEvent("Click", (*) => MacroController.RefreshDetection())
         
         ; 双击暂停
         this.uCtrl["dcPause"] := Map(
@@ -285,7 +251,7 @@ class GUIManager {
         )
         
         this.uCtrl["dcPause"]["interval"].OnEvent("LoseFocus", (*) => (
-            this.LimitEditValue(this.uCtrl["dcPause"]["interval"], 1, 3)))
+            UtilityHelper.LimitEditValue(this.uCtrl["dcPause"]["interval"], 1, 3)))
         
         ; 血条检测
         this.uCtrl["ipPause"] := Map(
@@ -295,9 +261,8 @@ class GUIManager {
         )
         ; 输入验证
         this.uCtrl["ipPause"]["interval"].OnEvent("LoseFocus", (*) => (
-            this.LimitEditValue(this.uCtrl["ipPause"]["interval"], 10, 1000)))
+            UtilityHelper.LimitEditValue(this.uCtrl["ipPause"]["interval"], 10, 1000)))
         
-        ; 界面检测
         this.uCtrl["tabPause"] := Map(
             "text", this.myGui.AddText("x335 y250 w60 h20", "界面检测:"),
             "enable", this.myGui.AddCheckbox("x400 y250 w20 h20"),
@@ -305,9 +270,8 @@ class GUIManager {
         )
         ; 输入验证
         this.uCtrl["tabPause"]["interval"].OnEvent("LoseFocus", (*) => (
-            this.LimitEditValue(this.uCtrl["tabPause"]["interval"], 10, 1000)))
+            UtilityHelper.LimitEditValue(this.uCtrl["tabPause"]["interval"], 10, 1000)))
         
-        ; 坐标偏移量
         this.uCtrl["xy"] := Map(
             "text", this.myGui.AddText("x335 y280 w60 h20", "偏移:"),
             "text2", this.myGui.AddText("x375 y280 w15 h20", "X"),
@@ -318,12 +282,11 @@ class GUIManager {
         ; 输入验证
         this.uCtrl["xy"]["x"].OnEvent("LoseFocus", (*) => (
             this.uCtrl["xy"]["x"].Value := Integer(this.uCtrl["xy"]["x"].Value),
-            this.LimitEditValue(this.uCtrl["xy"]["x"], -3, 3)))
+            UtilityHelper.LimitEditValue(this.uCtrl["xy"]["x"], -3, 3)))
         this.uCtrl["xy"]["y"].OnEvent("LoseFocus", (*) => (
             this.uCtrl["xy"]["y"].Value := Integer(this.uCtrl["xy"]["y"].Value),
-            this.LimitEditValue(this.uCtrl["xy"]["y"], -3, 3)))
+            UtilityHelper.LimitEditValue(this.uCtrl["xy"]["y"], -3, 3)))
         
-        ; 鼠标自动移动
         this.uCtrl["mouseAutoMove"] := Map(
             "text", this.myGui.AddText("x325 y460 w60 h20", "鼠标自移:"),
             "enable", this.myGui.AddCheckbox("x395 y460 w20 h20"),
@@ -350,10 +313,10 @@ class GUIManager {
         this.uCtrl["PM"]["time1"].Enabled := false
         this.uCtrl["PM"]["timeX"].Enabled := false
         this.uCtrl["PM"]["correct"].OnEvent("LoseFocus", (*) => (
-            this.LimitEditValue(this.uCtrl["PM"]["correct"], 1, 5)
+            UtilityHelper.LimitEditValue(this.uCtrl["PM"]["correct"], 1, 5)
         ))
         this.uCtrl["PM"]["xiuValue"].OnEvent("LoseFocus", (*) => (
-            this.LimitEditValue(this.uCtrl["PM"]["xiuValue"], 1, 5)
+            UtilityHelper.LimitEditValue(this.uCtrl["PM"]["xiuValue"], 1, 5)
         ))
         
         this.myGui.AddText("x30 y180 w60 h20", "精造模式:")
@@ -376,13 +339,113 @@ class GUIManager {
             "text", this.myGui.AddText("x30 y98 w60 h20", "窗口置顶:"),
             "enable", this.myGui.AddCheckbox("x90 y100 w15 h15")
         )
-        ; 绑定事件，当勾选状态改变时切换窗口置顶属性
-        this.uCtrl["alwaysOnTop"]["enable"].OnEvent("Click", (*) => this.ToggleAlwaysOnTop())
+
+        this.uCtrl["alwaysOnTop"]["enable"].OnEvent("Click", (*) => UtilityHelper.ToggleAlwaysOnTop())
+    }
+
+    /**
+     * 更新状态显示
+     * @param {String} status - 主状态文本
+     * @param {String} barText - 状态栏文本
+     */
+    static UpdateStatus(status, barText) {
+        if (status = "已暂停") {
+            this.statusText.Value := "状态: 已暂停"
+            this.statusBar.Text := "宏已暂停 - " barText
+        } else {
+            this.statusText.Value := status ? ("状态: " status) : "状态: 运行中"
+            this.statusBar.Text := barText
+        }
+    }
+}
+
+/**
+ * 热键管理类
+ * 负责热键的加载、更新和文本显示管理
+ * @version 1.0.0
+ * @author Archenemy
+ */
+class HotkeyManager {
+    /**
+     * 加载全局热键
+     */
+    static LoadStartHotkey() {
+        static currentHotkey := ""
+        
+        mode := GUIManager.startkey["mode"].Value
+        GUIManager.startkey["guiHotkey"].Enabled := GUIManager.startkey["userkey"][mode].input
+        newHotkey := ""
+        
+        switch mode {
+            case 1:
+                newHotkey := GUIManager.startkey["userkey"][1].key
+            case 2:
+                newHotkey := GUIManager.startkey["userkey"][2].key
+            case 3:
+                newHotkey := GUIManager.startkey["userkey"][3].key
+        }
+        
+        try {
+            if (currentHotkey != "" && currentHotkey != newHotkey) {
+                try {
+                    Hotkey(currentHotkey, "Off")
+                } catch {
+                }
+            }
+            
+            if (newHotkey != currentHotkey) {
+                Hotkey(newHotkey, (*) => MacroController.ToggleMacro(), "On")
+                currentHotkey := newHotkey
+                if (GUIManager.statusBar != "") {
+                    GUIManager.statusBar.Text := "热键已更新: " newHotkey
+                }
+                this.UpdateHotkeyText()
+            }
+        } catch {
+        }
     }
     
     /**
-     * 数值限制函数
-     * @param {Object} ctrl - 控件对象
+     * 更新热键文本显示
+     */
+    static UpdateHotkeyText() {
+        if (GUIManager.startkey == "" || GUIManager.hotkeyText == "")
+            return
+            
+        try {
+            mode := GUIManager.startkey["mode"].Value
+            modeNames := ["自定义", "鼠标侧键1", "鼠标侧键2"]
+            modeName := modeNames[mode]
+            
+            currentKey := ""
+            switch mode {
+                case 1:
+                    currentKey := GUIManager.startkey["userkey"][1].key
+                case 2:
+                    currentKey := "XButton1"
+                case 3:
+                    currentKey := "XButton2"
+            }
+            
+            displayText := "启动热键: " . modeName . " - " . currentKey
+            GUIManager.hotkeyText.Text := displayText
+            
+        } catch {
+            GUIManager.hotkeyText.Text := "启动热键: 自定义 - F1"
+        }
+    }
+}
+
+/**
+ * 工具类
+ * 提供各种实用工具函数
+ * @version 1.0.0
+ * @author Archenemy
+ */
+class UtilityHelper {
+    /**
+     * 限制编辑框数值范围
+     * @param {Object} ctrl - 编辑框控件
      * @param {Number} min - 最小值
      * @param {Number} max - 最大值
      */
@@ -419,99 +482,105 @@ class GUIManager {
      */
     static ToggleAlwaysOnTop() {
         try {
-            if (this.uCtrl["alwaysOnTop"]["enable"].Value = 1) {
-                ; 设置窗口置顶
-                WinSetAlwaysOnTop(true, this.myGui.Hwnd)
+            if (GUIManager.uCtrl["alwaysOnTop"]["enable"].Value = 1) {
+                WinSetAlwaysOnTop(true, GUIManager.myGui.Hwnd)
             } else {
-                ; 取消窗口置顶
-                WinSetAlwaysOnTop(false, this.myGui.Hwnd)
+                WinSetAlwaysOnTop(false, GUIManager.myGui.Hwnd)
             }
         } catch as err {
             OutputDebug "切换窗口置顶状态失败: " err.Message
         }
     }
-    
+
+    static MoveMouseFunc := 0 ; 鼠标移动定时器
+
     /**
-     * 加载全局热键
+     * 启动鼠标自动移动
      */
-    static LoadStartHotkey() {
-        static currentHotkey := ""
-        
-        mode := this.startkey["mode"].Value
-        this.startkey["guiHotkey"].Enabled := this.startkey["userkey"][mode].input
-        newHotkey := ""
-        
-        switch mode {
-            case 1:
-                newHotkey := this.startkey["userkey"][1].key
-            case 2:
-                newHotkey := this.startkey["userkey"][2].key
-            case 3:
-                newHotkey := this.startkey["userkey"][3].key
+    static StartMove(){
+        this.StopMove()
+        if(this.MoveMouseFunc == 0) {
+            this.MoveMouseFunc := () => this.MoveMouse()
         }
-        
+        interval := Integer(GUIManager.uCtrl["mouseAutoMove"]["interval"].Value)
+        if (interval > 0) {
+            UtilityHelper.MoveMouse()
+            SetTimer(this.MoveMouseFunc, interval)
+        }
+    }
+
+    /**
+     * 停止鼠标自动移动
+     */
+    static StopMove(){
+        if (this.MoveMouseFunc != 0) {
+            SetTimer(this.MoveMouseFunc, 0)
+            this.MoveMouseFunc := 0
+        }
+    }
+
+    /**
+     * 鼠标自动移动函数
+     */
+    static MoveMouse() {
+        allcoords := WindowManager.GetAllCoord()
+
         try {
-            if (currentHotkey != "" && currentHotkey != newHotkey) {
-                try {
-                    Hotkey(currentHotkey, "Off")
-                } catch {
-                }
-            }
-            
-            if (newHotkey != currentHotkey) {
-                Hotkey(newHotkey, (*) => MacroController.ToggleMacro(), "On")
-                currentHotkey := newHotkey
-                if (this.statusBar != "") {
-                    this.statusBar.Text := "热键已更新: " newHotkey
-                }
-                this.UpdateHotkeyText()
-            }
-        } catch {
+            if (!GUIManager.uCtrl["mouseAutoMove"].Has("currentPoint"))
+                GUIManager.uCtrl["mouseAutoMove"]["currentPoint"] := 1
+
+            currentIndex := GUIManager.uCtrl["mouseAutoMove"]["currentPoint"]
+
+            if (currentIndex < 1 || currentIndex > 6)
+                currentIndex := 1
+
+            currentPoint := allcoords["mouse_move_" currentIndex]
+            MouseMove(currentPoint.x, currentPoint.y, 0)
+
+            GUIManager.uCtrl["mouseAutoMove"]["currentPoint"] := Mod(currentIndex, 6) + 1
+
         }
     }
     
     /**
-     * 更新热键文本显示
+     * 将数组元素用指定分隔符连接
+     * @param {Array} arr - 要连接的数组
+     * @param {String} delimiter - 分隔符
+     * @returns {String} - 连接后的字符串
      */
-    static UpdateHotkeyText() {
-        if (this.startkey == "" || this.hotkeyText == "")
-            return
-            
-        try {
-            mode := this.startkey["mode"].Value
-            modeNames := ["自定义", "鼠标侧键1", "鼠标侧键2"]
-            modeName := modeNames[mode]
-            
-            currentKey := ""
-            switch mode {
-                case 1:
-                    currentKey := this.startkey["userkey"][1].key
-                case 2:
-                    currentKey := "XButton1"
-                case 3:
-                    currentKey := "XButton2"
-            }
-            
-            displayText := "启动热键: " . modeName . " - " . currentKey
-            this.hotkeyText.Text := displayText
-            
-        } catch {
-            this.hotkeyText.Text := "启动热键: 自定义 - F1"
+    static Join(arr, delimiter := ",") {
+        result := ""
+        for i, v in arr {
+            result .= (i > 1 ? delimiter : "") . v
         }
+        return result
     }
     
     /**
-     * 更新状态显示
-     * @param {String} status - 主状态文本
-     * @param {String} barText - 状态栏文本
+     * 调试日志记录函数
+     * @param {String} message - 要记录的消息
      */
-    static UpdateStatus(status, barText) {
-        if (status = "已暂停") {
-            this.statusText.Value := "状态: 已暂停"
-            this.statusBar.Text := "宏已暂停 - " barText
-        } else {
-            this.statusText.Value := status ? ("状态: " status) : "状态: 运行中"
-            this.statusBar.Text := barText
+    static DebugLog(message) {
+        if DEBUG {
+            try {
+                logFile := debugLogFile
+                maxSize := 1024 * 1024
+
+                if FileExist(logFile) {
+                    fileObj := FileOpen(logFile, "r")
+                    if (fileObj.Length > maxSize) {
+                        fileObj.Close()
+                        FileDelete logFile
+                    } else {
+                        fileObj.Close()
+                    }
+                }
+
+                timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
+                FileAppend(timestamp . " - " . message . "`n", logFile)
+            } catch as err {
+                OutputDebug "日志写入失败: " err.Message
+            }
         }
     }
 }
@@ -594,7 +663,7 @@ class MacroController {
         }
         
         if (now) {
-            reasonsText := Join(currentPausedReasons, " + ")
+            reasonsText := UtilityHelper.Join(currentPausedReasons, " + ")
             GUIManager.UpdateStatus("已暂停", reasonsText)
         } else {
             if (this.isRunning) {
@@ -609,45 +678,34 @@ class MacroController {
      * 启动所有定时器
      */
     static StartAllTimers() {
-        ; 重置所有暂停状态
+
         for reason, config in this.pauseConfig {
             config.state := false
         }
         
-        ; 初始化坐标和鼠标移动
         if (GUIManager.uCtrl["D4only"]["enable"].Value == 1) {
             WindowManager.GetAllCoord()
             if (GUIManager.uCtrl["mouseAutoMove"]["enable"].Value) {
-                interval := Integer(GUIManager.uCtrl["mouseAutoMove"]["interval"].Value)
-                if (interval > 0) {
-                    MoveMouse()
-                    SetTimer(MoveMouse, interval)
-                }
-            } else {
-                SetTimer(MoveMouse, 0)
+                UtilityHelper.StartMove()
             }
         }
         
-        ; 启动队列模式或多线程模式
         if (GUIManager.RunMod.Value = 2) {
             KeyQueueManager.StartQueue()
         }
         
-        ; 启动技能按键
         loop 5 {
             if (GUIManager.cSkill[A_Index]["enable"].Value) {
                 KeyHandler.PressKeyCallback("skill", A_Index)
             }
         }
         
-        ; 启动鼠标按键
         for mouseBtn in ["left", "right"] {
             if (GUIManager.mSkill[mouseBtn]["enable"].Value) {
                 KeyHandler.PressKeyCallback("mouse", mouseBtn)
             }
         }
         
-        ; 启动功能键
         for uSkillId in ["dodge", "potion", "forceMove"] {
             if (GUIManager.uCtrl[uSkillId]["enable"].Value) {
                 KeyHandler.PressKeyCallback("uSkill", uSkillId)
@@ -659,20 +717,13 @@ class MacroController {
      * 停止所有定时器
      */
     static StopAllTimers() {
-        ; 停止队列模式
         if (GUIManager.RunMod.Value = 2) {
             KeyQueueManager.StopQueue()
         }
-        
-        ; 停止所有技能定时器
         KeyHandler.ClearAllTimers()
-        
-        ; 停止鼠标自动移动
         if (GUIManager.uCtrl["mouseAutoMove"]["enable"].Value) {
-            SetTimer(MoveMouse, 0)
+            UtilityHelper.StopMove()
         }
-        
-        ; 释放所有按键
         this.ReleaseAllKeys()
     }
     
@@ -680,30 +731,12 @@ class MacroController {
      * 释放所有按键
      */
     static ReleaseAllKeys() {
-        ; 使用 KeyHandler 重置按住状态
         KeyHandler.ResetHoldStates()
         
         if GUIManager.uCtrl["shift"]["enable"].Value {
             Send "{Blind}{Shift up}"
         }
     }
-    
-    /**
-     * 立即刷新所有检测
-     */
-    static RefreshDetection(*) {
-        if !this.isRunning {
-            GUIManager.statusBar.Text := "无需刷新检测"
-            return
-        }
-        
-        PauseDetector.ManageTimers(false)
-        Sleep 100  ; 确保定时器已停止
-        PauseDetector.ManageTimers(true)
-        GUIManager.UpdateStatus("运行中", "已强制重置")
-    }
-    
-
 }
 
 /**
@@ -716,7 +749,7 @@ class KeyHandler {
     ; 静态属性 - 存储按键状态
     static holdStates := Map()          ; 按住状态缓存
     static skillTimers := Map()         ; 技能定时器
-    static coordCache := Map()          ; 坐标缓存
+    static coordCache := Map()          ; 技能坐标缓存
 
     /**
      * 检查是否为鼠标按键
@@ -774,7 +807,7 @@ class KeyHandler {
      */
     static _ExecuteKey(keyData, shiftEnabled) {
         if (this.IsMouse(keyData)) {
-            ; 鼠标按键处理
+
             if (shiftEnabled) {
                 Send "{Blind}{Shift down}"
                 Click(keyData.key)
@@ -800,17 +833,15 @@ class KeyHandler {
      * @param {String|Integer} id - 标识符
      */
     static PressKeyCallback(category, id) {
-        ; 获取配置
+
         config := this._GetConfig(category, id)
         if (!config)
             return
 
-        ; 构建按键数据
         keyData := this._BuildKeyData(category, id, config)
         if (!keyData)
             return
 
-        ; 清理现有定时器
         if (this.skillTimers.Has(keyData.uniqueKey)) {
             try {
                 SetTimer(this.skillTimers[keyData.uniqueKey], 0)
@@ -819,7 +850,6 @@ class KeyHandler {
             this.skillTimers.Delete(keyData.uniqueKey)
         }
 
-        ; 执行按键处理
         if (GUIManager.RunMod.Value == 1) {
             timerFunc := () => this.HandleKeyMode(keyData)
             this.skillTimers[keyData.uniqueKey] := timerFunc
@@ -867,16 +897,16 @@ class KeyHandler {
         mode := config.Has("mode") ? config["mode"].Value : 1
         interval := Integer(config["interval"].Value)
         coord := this.GetSkillCoords(id)
-        ; 生成唯一键（同时作为定时器键使用）
+
         uniqueKey := (isMouse ? "mouse:" : "key:") . key
 
         keyData := {
             key: key,                         ; 目标键/按钮
             mode: mode,                       ; 操作模式
-            interval: interval,               ; 执行间隔
+            interval: interval,               ; 间隔时间（毫秒）
             uniqueKey: uniqueKey,             ; 唯一键（兼定时器键）
-            id: id,                   ; 标识符（BUFF模式需要）
-            coord: coord                      ; 坐标（如果适用）
+            id: id,                           ; 标识符（BUFF模式需要）
+            coord: coord
         }
      
         ; D4only模式下模式调整
@@ -909,7 +939,7 @@ class KeyHandler {
 
             loop 2 {
                 try {
-                    color := GetPixelRGB(coord.x, coord.y, false)
+                    color := ColorDetector.GetPixelRGB(coord.x, coord.y, false)
                     if (ColorDetector.IsGreen(color))
                         return true
                 } catch {
@@ -976,7 +1006,7 @@ class KeyHandler {
 
         loop 5 {
             try {
-                color := GetPixelRGB(coord.x, coord.y + (A_Index - 1), false)
+                color := ColorDetector.GetPixelRGB(coord.x, coord.y + (A_Index - 1), false)
                 if (!ColorDetector.IsGray(color))  ; 如果不是灰色，认为资源充足
                     return true
             } catch {
@@ -1045,24 +1075,25 @@ class KeyHandler {
 class KeyQueueManager {
     static keyQueue := []
     static lastExec := Map()
-    static critSection := false
     static maxLen := 15
-    static QueueTimer := unset
-    ; 启动队列模式
+    static QueueTimer := 0
+    static QueueWorkerFunc := 0
+    
     static StartQueue() {
-        if (!this.HasProp("QueueTimer")) {
-            this.QueueTimer := ObjBindMethod(this, "KeyQueueWorker")
-            SetTimer(this.QueueTimer, 10)
+        this.StopQueue()
+        if (this.QueueWorkerFunc == 0) {
+            this.QueueWorkerFunc := () => this.KeyQueueWorker()
         }
+        SetTimer(this.QueueWorkerFunc, 10)
+        this.QueueTimer := 1
     }
     
-    ; 停止队列模式
     static StopQueue() {
-        if (this.HasProp("QueueTimer")) {
-            SetTimer(this.QueueTimer, 0)
-            this.QueueTimer := unset
-            this.ClearQueue()
+        this.QueueTimer := 0
+        if (this.QueueWorkerFunc != 0) {
+            SetTimer(this.QueueWorkerFunc, 0)
         }
+        this.ClearQueue()
     }
 
     /**
@@ -1146,16 +1177,17 @@ class KeyQueueManager {
      * @description 处理队列中的按键事件
      */
     static KeyQueueWorker() {
-        if !(this.keyQueue is Array) || this.keyQueue.Length == 0
+        if (this.QueueTimer = 0) {
             return
-
-        if this.critSection
-            return
-
-        this.critSection := true
+        }
+        
         now := A_TickCount
         i := this.keyQueue.Length
         while (i >= 1) {
+            if (this.keyQueue.Length == 0 || i > this.keyQueue.Length) {
+                break
+            }
+            
             item := this.keyQueue[i]
             uniqueKey := item.uniqueKey
             lastExecTime := this.lastExec.Get(uniqueKey, 0)
@@ -1165,9 +1197,12 @@ class KeyQueueManager {
                     i--
                     continue
                 }
-                
                 KeyHandler.HandleKeyMode(item)
                 this.lastExec[uniqueKey] := now
+
+                if (i <= this.keyQueue.Length) {
+                    this.keyQueue.RemoveAt(i)
+                }
                 i--
                 continue
             }
@@ -1175,16 +1210,15 @@ class KeyQueueManager {
             if ((now - lastExecTime) >= item.interval) {
                 KeyHandler.HandleKeyMode(item)
                 this.lastExec[uniqueKey] := now
-                ; 对于非按住模式的按键，重新入队
                 if (item.mode != 3) {
-                    this.keyQueue.RemoveAt(i)
-                    this.EnqueueKey(item)
+                    if (i <= this.keyQueue.Length) {
+                        this.keyQueue.RemoveAt(i)
+                        this.EnqueueKey(item)
+                    }
                 }
             }
             i--
         }
-        
-        this.critSection := false
     }
 
     /**
@@ -1193,11 +1227,9 @@ class KeyQueueManager {
     static ClearQueue() {
         this.keyQueue := []
         this.lastExec.Clear()
-        this.critSection := false
     }
 }
 
-; ==================== 窗口管理类 ====================
 /**
  * 统一窗口管理类
  * 负责窗口检测、坐标转换、分辨率适配等所有窗口相关功能
@@ -1213,25 +1245,25 @@ class WindowManager {
     
     ; 常量定义
     static D4_WINDOW_CLASS := "Diablo IV Main Window Class"
-    static REFERENCE_WIDTH := 3840      ; 4K参考宽度
-    static REFERENCE_HEIGHT := 2160     ; 4K参考高度
-    static REFERENCE_CENTER_X := 1920   ; 4K参考中心X
-    static REFERENCE_CENTER_Y := 1080   ; 4K参考中心Y
+    static REFERENCE_WIDTH := 3840
+    static REFERENCE_HEIGHT := 2160
+    static REFERENCE_CENTER_X := 1920
+    static REFERENCE_CENTER_Y := 1080
 
     /**
      * 获取暗黑4窗口信息并计算缩放比例
      * @returns {Map} 包含窗口尺寸和缩放比例信息的Map对象
      */
     static GetWindowInfo() {
-        ; 初始化默认窗口信息
+
         windowInfo := Map(
             "D4W", 0.0,                     ; 客户区实际宽度
             "D4H", 0.0,                     ; 客户区实际高度
             "CD4W", 0.0,                    ; 客户区中心X坐标（浮点）
             "CD4H", 0.0,                    ; 客户区中心Y坐标（浮点）
             "D4S", 1.0,                     ; 统一缩放比例
-            "D4SW", 1.0,                    ; 宽度独立缩放比例
-            "D4SH", 1.0,                    ; 高度独立缩放比例
+            "D4SW", 1.0,
+            "D4SH", 1.0,
             "D44KW", this.REFERENCE_WIDTH,  ; 参考分辨率宽度
             "D44KH", this.REFERENCE_HEIGHT, ; 参考分辨率高度
             "D44KWC", this.REFERENCE_CENTER_X, ; 参考中心X坐标
@@ -1244,22 +1276,20 @@ class WindowManager {
                 rect := Buffer(16)
 
                 if (DllCall("GetClientRect", "Ptr", hWnd, "Ptr", rect)) {
-                    ; 计算客户区尺寸
+
                     windowInfo["D4W"] := NumGet(rect, 8, "Int") - NumGet(rect, 0, "Int")
                     windowInfo["D4H"] := NumGet(rect, 12, "Int") - NumGet(rect, 4, "Int")
 
-                    ; 计算精确的中心点（浮点）
                     windowInfo["CD4W"] := windowInfo["D4W"] / 2
                     windowInfo["CD4H"] := windowInfo["D4H"] / 2
 
-                    ; 计算缩放比例
                     windowInfo["D4SW"] := windowInfo["D4W"] / windowInfo["D44KW"]
                     windowInfo["D4SH"] := windowInfo["D4H"] / windowInfo["D44KH"]
                     windowInfo["D4S"] := Min(windowInfo["D4SW"], windowInfo["D4SH"])
                 }
             }
         } catch as err {
-            DebugLog("获取窗口信息失败: " . err.Message)
+            UtilityHelper.DebugLog("获取窗口信息失败: " . err.Message)
         }
 
         this.windowInfo := windowInfo
@@ -1289,16 +1319,14 @@ class WindowManager {
      * @returns {Object} 转换后的坐标 {x, y}
      */
     static ConvertCoord(coord, windowInfo := unset) {
-        ; 获取窗口信息
+
         if (!IsSet(windowInfo)) {
             windowInfo := this.GetWindowInfo()
         }
 
-        ; 获取用户偏移设置
         userX := GUIManager.uCtrl["xy"]["x"].Value
         userY := GUIManager.uCtrl["xy"]["y"].Value
 
-        ; 计算转换后的坐标
         x := Round(windowInfo["CD4W"] + (coord.x - windowInfo["D44KWC"]) * windowInfo["D4S"])
         y := Round(windowInfo["CD4H"] + (coord.y - windowInfo["D44KHC"]) * windowInfo["D4S"])
 
@@ -1318,7 +1346,6 @@ class WindowManager {
     static GetAllCoord() {
         currentWindowInfo := this.GetWindowInfo()
 
-        ; 检查是否需要重新计算坐标
         try {
             if (this.lastWindowInfo.Has("D4W") && this.coordCache.Count > 0) {
                 if (this.lastWindowInfo["D4W"] == currentWindowInfo["D4W"] && 
@@ -1330,7 +1357,6 @@ class WindowManager {
             ; 如果访问属性出错，说明还未初始化，继续执行初始化逻辑
         }
 
-        ; 更新缓存的窗口信息
         this.lastWindowInfo := currentWindowInfo.Clone()
         this.coordCache := Map()
 
@@ -1344,12 +1370,10 @@ class WindowManager {
             "resource_bar", {x: 2620, y: 1875}
         )
 
-        ; 转换基础坐标
         for name, coord in coordConfig {
             this.coordCache[name] := this.ConvertCoord(coord, currentWindowInfo)
         }
 
-        ; 生成对话框红色按钮坐标（6个）
         loop 6 {
             this.coordCache["dialog_red_btn_" . A_Index] := this.ConvertCoord({
                 x: 50 + 90 * (A_Index - 1), 
@@ -1357,7 +1381,6 @@ class WindowManager {
             }, currentWindowInfo)
         }
 
-        ; 生成鼠标移动坐标（6个位置）
         static mouseMoveRatios := [
             {x: 0.15, y: 0.15}, {x: 0.5, y: 0.15}, {x: 0.85, y: 0.15},
             {x: 0.85, y: 0.85}, {x: 0.5, y: 0.85}, {x: 0.15, y: 0.85}
@@ -1397,7 +1420,7 @@ class WindowManager {
                 }
             }
         } catch as err {
-            DebugLog("窗口状态检测失败: " . err.Message)
+            UtilityHelper.DebugLog("窗口状态检测失败: " . err.Message)
         }
     }
 
@@ -1543,11 +1566,10 @@ class PerfectCraftingManager {
         startTime := this.GetPreciseTime()
         Click
         
-        ; 更新UI显示
         GUIManager.uCtrl["PM"]["time1"].Value := FormatTime(, "HH:mm:ss") . "." . Format("{:03}", Mod(Round(startTime/1000), 1000))
         GUIManager.uCtrl["PM"]["time"] := startTime
         
-        DebugLog("精造开始 - 时间: " . startTime)
+        UtilityHelper.DebugLog("精造开始 - 时间: " . startTime)
     }
 
     /**
@@ -1567,7 +1589,6 @@ class PerfectCraftingManager {
             Sleep(this.CLICK_DELAY)
         }
         
-        ; 计算精确点击时机
         currentTime := this.GetPreciseTime()
         elapsedTime := currentTime - startTime
         currentPhase := Mod(elapsedTime, timing.needTime)
@@ -1584,14 +1605,12 @@ class PerfectCraftingManager {
             Sleep(0)
         }
         
-        ; 执行精造点击
         Click
         endTime := this.GetPreciseTime()
         
-        ; 计算和显示结果
         this.CalculateAndDisplayResult(startTime, endTime, config, timing)
         
-        DebugLog("精造继续 - 开始: " . startTime . " 结束: " . endTime)
+        UtilityHelper.DebugLog("精造继续 - 开始: " . startTime . " 结束: " . endTime)
     }
 
     /**
@@ -1605,34 +1624,30 @@ class PerfectCraftingManager {
         totalElapsed := endTime - startTime
         finalPhase := Mod(totalElapsed, timing.needTime)
         
-        ; 计算实际命中的固定相位编号
         phaseIndex := Floor(finalPhase / config.trueTime)
         actualFixedPhase := Mod(config.correct + phaseIndex - 1, timing.totalPhases) + 1
         
-        ; 计算偏差
         phaseDeviation := finalPhase - timing.targetCenter + config.modTime
         
-        ; 更新UI显示
         resultText := "总耗时:" . Floor(totalElapsed/1000) . "ms 实际窗口:" . actualFixedPhase . "/" . config.xiuValue . " 偏差: " . Round(phaseDeviation/1000) . "ms"
         GUIManager.uCtrl["PM"]["timeX"].Value := resultText
         
-        DebugLog("精造结果 - " . resultText)
+        UtilityHelper.DebugLog("精造结果 - " . resultText)
     }
 
     /**
      * 重置精造数据
      */
     static ExecuteReset() {
-        ; 重置内部时间数据
+
         GUIManager.uCtrl["PM"]["time"] := 0
         
-        ; 重置UI显示控件
         GUIManager.uCtrl["PM"]["time1"].Value := ""
         GUIManager.uCtrl["PM"]["timeX"].Value := ""
         GUIManager.uCtrl["PM"]["correct"].Value := 1
         GUIManager.uCtrl["PM"]["xiuValue"].Value := 1
         
-        DebugLog("精造数据已重置")
+        UtilityHelper.DebugLog("精造数据已重置")
     }
 
     /**
@@ -1684,66 +1699,82 @@ class PauseDetector {
     static tabResumeHitCount := 0
     static enterPauseMissCount := 0
     static enterResumeHitCount := 0
-    static CheckWindowTimer := "" ; 窗口检测定时器句柄
-    static BloodDetectTimer := "" ; 血条检测定时器句柄
-    static TabDetectTimer := "" ; TAB界面检测定时器句柄
-    ; 检测阈值常量
+
     static PAUSE_THRESHOLD := 2
     static RESUME_THRESHOLD := 2
-    
+
+    static CheckTimer := Map()
 
     /**
-     * 启动所有检测定时器
+     * 管理所有检测定时器的启动和停止
+     * @param {Boolean} enable - true: 启动定时器, false: 停止定时器
      */
-    static ManageTimers(enable) {   
-        d4only := GUIManager.uCtrl["D4only"]["enable"].Value
-        blood := GUIManager.uCtrl["ipPause"]["enable"].Value
-        tab := GUIManager.uCtrl["tabPause"]["enable"].Value
-        ; 定时器管理属性
-        this.CheckWindowTimer := ObjBindMethod(this, "CheckWindow")     ; 窗口检测定时器
-        this.BloodDetectTimer := ObjBindMethod(this, "AutoPauseByBlood")     ; 血条检测定时器
-        this.TabDetectTimer := ObjBindMethod(this, "AutoPauseByTAB") ; TAB界面检测定时器
-        if (!d4only) {
-            blood := false
-            tab := false
-        }
-        
-        ; 启动窗口检测定时器
-        
-        if (!enable) {
-            if (this.CheckWindowTimer != "") {
-                SetTimer(this.CheckWindowTimer, 0)
+    static ManageTimers(enable) {
+        if (enable) {
+            this.GetTimerConfig()
+            for timerName, timerConfig in this.CheckTimer {
+                if (timerConfig.enabled) {
+                    SetTimer(timerConfig.func, timerConfig.interval)
+                } else {
+                    SetTimer(timerConfig.func, 0)
+                }
             }
-            if (this.BloodDetectTimer != "") {
-                SetTimer(this.BloodDetectTimer, 0)
+        } else {
+            if (this.CheckTimer.Count == 0) {
+                this.GetTimerConfig()
             }
-            if (this.TabDetectTimer != "") {
-                SetTimer(this.TabDetectTimer, 0)
+            
+            for timerName, timerConfig in this.CheckTimer {
+                try {
+                    SetTimer(timerConfig.func, 0)
+                } catch {
+                }
             }
             this.ResetCounters()
-        } else {
-            SetTimer(this.CheckWindowTimer, 100) ; 启动窗口检测定时器
-            ; 启动血条检测定时器
-            if (blood) {
-                actualInterval := (
-                    GUIManager.uCtrl.Has("ipPause") && GUIManager.uCtrl["ipPause"].Has("interval")
-                        ? Integer(GUIManager.uCtrl["ipPause"]["interval"].Value)
-                        : 50
-                )
-                SetTimer(this.BloodDetectTimer, actualInterval)
-            }
-        
-            ; 启动TAB界面检测定时器
-            if (tab) {
-                actualInterval := (
-                    GUIManager.uCtrl.Has("tabPause") && GUIManager.uCtrl["tabPause"].Has("interval")
-                        ? Integer(GUIManager.uCtrl["tabPause"]["interval"].Value)
-                        : 100
-                )
-                SetTimer(this.TabDetectTimer, actualInterval)
-            }
         }
     }
+
+    /**
+     * 获取定时器配置
+     * 包括箭头函数、启用状态和检测间隔
+     */
+    static GetTimerConfig() {
+
+        d4onlyEnabled := GUIManager.uCtrl["D4only"]["enable"].Value
+        bloodEnabled := GUIManager.uCtrl["ipPause"]["enable"].Value
+        tabEnabled := GUIManager.uCtrl["tabPause"]["enable"].Value
+        
+        bloodInterval := (
+            GUIManager.uCtrl.Has("ipPause") && GUIManager.uCtrl["ipPause"].Has("interval")
+                ? Integer(GUIManager.uCtrl["ipPause"]["interval"].Value)
+                : 50
+        )
+        
+        tabInterval := (
+            GUIManager.uCtrl.Has("tabPause") && GUIManager.uCtrl["tabPause"].Has("interval")
+                ? Integer(GUIManager.uCtrl["tabPause"]["interval"].Value)
+                : 100
+        )
+
+        this.CheckTimer["CheckWindow"] := {
+            func: () => this.CheckWindow(),
+            enabled: true,
+            interval: 100
+        }
+        
+        this.CheckTimer["AutoPauseByBlood"] := {
+            func: () => this.AutoPauseByBlood(),
+            enabled: d4onlyEnabled && bloodEnabled,  ; 血条检测依赖d4only模式
+            interval: bloodInterval
+        }
+        
+        this.CheckTimer["AutoPauseByTAB"] := {
+            func: () => this.AutoPauseByTAB(),
+            enabled: d4onlyEnabled && tabEnabled,    ; TAB检测依赖d4only模式
+            interval: tabInterval
+        }
+    }
+
     /**
      * 重置所有检测计数器
      */
@@ -1754,10 +1785,9 @@ class PauseDetector {
         this.tabResumeHitCount := 0
         this.enterPauseMissCount := 0
         this.enterResumeHitCount := 0
-        this.CheckWindowTimer := "" ; 窗口检测定时器句柄
-        this.BloodDetectTimer := "" ; 血条检测定时器句柄
-        this.TabDetectTimer := "" ; TAB界面检测定时器句柄
+        this.CheckTimer.Clear()
     }
+
     /**
      * 窗口切换检查函数
      */
@@ -1776,19 +1806,13 @@ class PauseDetector {
         tabCoord := allcoords["tab_interface_red"]
 
         colorDFX := IsSet(pixelCache) && pixelCache.Has(dfxCoord.x . "," . dfxCoord.y) ? 
-            pixelCache[dfxCoord.x . "," . dfxCoord.y] : GetPixelRGB(dfxCoord.x, dfxCoord.y)
-
-        if (ColorDetector.IsBlue(colorDFX)) {
-            return {isBlueColor: true, isRedColor: false}
-        }
-
+            pixelCache[dfxCoord.x . "," . dfxCoord.y] : ColorDetector.GetPixelRGB(dfxCoord.x, dfxCoord.y)
         colorTAB := IsSet(pixelCache) && pixelCache.Has(tabCoord.x . "," . tabCoord.y) ? 
-            pixelCache[tabCoord.x . "," . tabCoord.y] : GetPixelRGB(tabCoord.x, tabCoord.y)
+            pixelCache[tabCoord.x . "," . tabCoord.y] : ColorDetector.GetPixelRGB(tabCoord.x, tabCoord.y)
 
-        if (ColorDetector.IsRed(colorTAB)) {
-            return {isBlueColor: false, isRedColor: true}
-        } else {
-            return {isBlueColor: true, isRedColor: false}
+        return {
+            isBlueColor: ColorDetector.IsBlue(colorDFX), 
+            isRedColor: ColorDetector.IsRed(colorTAB)
         }
     }
 
@@ -1804,23 +1828,21 @@ class PauseDetector {
             redPoints := ["dialog_red_btn_1", "dialog_red_btn_2", "dialog_red_btn_3", 
                          "dialog_red_btn_4", "dialog_red_btn_5", "dialog_red_btn_6"]
 
-            ; 1. 检测灰色背景
             coord := allcoords[grayPoint]
             key := coord.x . "," . coord.y
             
             grayColor := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
-                pixelCache[key] : GetPixelRGB(coord.x, coord.y)
+                pixelCache[key] : ColorDetector.GetPixelRGB(coord.x, coord.y)
 
             if (!ColorDetector.IsGray(grayColor))
                 return false
 
-            ; 2. 检测红色按钮
             for , point in redPoints {
                 coord := allcoords[point]
                 key := coord.x . "," . coord.y
                 
                 colorObj := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
-                    pixelCache[key] : GetPixelRGB(coord.x, coord.y)
+                    pixelCache[key] : ColorDetector.GetPixelRGB(coord.x, coord.y)
 
                 if (ColorDetector.IsRed(colorObj)) {
                     return true
@@ -1855,7 +1877,7 @@ class PauseDetector {
                 key := sampleX . "," . sampleY
 
                 color := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
-                    pixelCache[key] : GetPixelRGB(sampleX, sampleY)
+                    pixelCache[key] : ColorDetector.GetPixelRGB(sampleX, sampleY)
 
                 if (IsSet(pixelCache)) {
                     pixelCache[key] := color
@@ -1895,7 +1917,7 @@ class PauseDetector {
                 key := sampleX . "," . sampleY
 
                 color := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
-                    pixelCache[key] : GetPixelRGB(sampleX, sampleY)
+                    pixelCache[key] : ColorDetector.GetPixelRGB(sampleX, sampleY)
 
                 if (IsSet(pixelCache)) {
                     pixelCache[key] := color
@@ -1919,7 +1941,7 @@ class PauseDetector {
      * 定时检测血条并自动暂停/启动宏
      */
     static AutoPauseByBlood() {
-        allcoords := WindowManager.GetAllCoord()  ; 获取坐标数据
+        allcoords := WindowManager.GetAllCoord()
         bloodDetected := false
         
         try {
@@ -1964,13 +1986,12 @@ class PauseDetector {
      * 定时检测界面状态并自动暂停/启动宏
      */
     static AutoPauseByTAB() {
-        allcoords := WindowManager.GetAllCoord()  ; 获取坐标数据
+        allcoords := WindowManager.GetAllCoord()
 
         try {
             pixelCache := Map()
             keyPoints := this.CheckKeyPoints(allcoords, pixelCache)
 
-            ; 处理 TAB 界面检测
             if (MacroController.pauseConfig["tab"].state) {
                 if (keyPoints.isBlueColor) {
                     this.tabResumeHitCount++
@@ -1995,7 +2016,6 @@ class PauseDetector {
                 }
             }
 
-            ; 处理对话框检测
             if (MacroController.pauseConfig["enter"].state) {
                 if (!this.CheckPauseByEnter(allcoords, pixelCache)) {
                     this.enterResumeHitCount++
@@ -2025,69 +2045,78 @@ class PauseDetector {
 }
 
 /**
- * 获取指定坐标像素的RGB颜色值
- * @param {Integer} x - X坐标
- * @param {Integer} y - Y坐标
- * @param {Boolean} useCache - 是否使用缓存，默认为true
- * @returns {Object} - 包含r, g, b三个颜色分量的对象
+ * 颜色检测器类
+ * 负责像素颜色获取和颜色类型判断
+ * @version 1.0.0
+ * @author Archenemy
  */
-GetPixelRGB(x, y, useCache := true) {
+class ColorDetector {
+    ; 静态缓存配置
     static pixelCache := Map()
     static cacheLifetime := 50
     static lastCacheClear := 0
     static maxCacheEntries := 100
     
-    if (!useCache) {
+    /**
+     * 获取指定坐标像素的RGB颜色值
+     * @param {Integer} x - X坐标
+     * @param {Integer} y - Y坐标
+     * @param {Boolean} useCache - 是否使用缓存，默认为true
+     * @returns {Object} - 包含r, g, b三个颜色分量的对象
+     */
+    static GetPixelRGB(x, y, useCache := true) {
+        if (!useCache) {
+            try {
+                color := PixelGetColor(x, y, "RGB")
+                return {
+                    r: (color >> 16) & 0xFF,
+                    g: (color >> 8) & 0xFF,
+                    b: color & 0xFF
+                }
+            } catch {
+                return {r: 0, g: 0, b: 0}
+            }
+        }
+        
+        currentTime := A_TickCount
+        timeSlot := currentTime // this.cacheLifetime
+        cacheKey := (x << 20) | (y << 8) | (timeSlot & 0xFF)
+        
+        if (currentTime - this.lastCacheClear > 150) {
+            if (this.pixelCache.Count > this.maxCacheEntries) {
+                this.pixelCache.Clear()
+            }
+            this.lastCacheClear := currentTime
+        }
+        
+        if (this.pixelCache.Has(cacheKey)) {
+            return this.pixelCache[cacheKey]
+        }
+        
         try {
             color := PixelGetColor(x, y, "RGB")
-            return {
+            result := {
                 r: (color >> 16) & 0xFF,
                 g: (color >> 8) & 0xFF,
                 b: color & 0xFF
             }
+            this.pixelCache[cacheKey] := result
+            return result
         } catch {
-            return {r: 0, g: 0, b: 0}
+            result := {r: 0, g: 0, b: 0}
+            this.pixelCache[cacheKey] := result
+            return result
         }
     }
     
-    currentTime := A_TickCount
-    timeSlot := currentTime // cacheLifetime
-    cacheKey := (x << 20) | (y << 8) | (timeSlot & 0xFF)
-    
-    if (currentTime - lastCacheClear > 150) {
-        if (pixelCache.Count > maxCacheEntries) {
-            pixelCache.Clear()
-        }
-        lastCacheClear := currentTime
+    /**
+     * 清理像素缓存
+     */
+    static ClearCache() {
+        this.pixelCache.Clear()
+        this.lastCacheClear := A_TickCount
     }
     
-    if (pixelCache.Has(cacheKey)) {
-        return pixelCache[cacheKey]
-    }
-    
-    try {
-        color := PixelGetColor(x, y, "RGB")
-        result := {
-            r: (color >> 16) & 0xFF,
-            g: (color >> 8) & 0xFF,
-            b: color & 0xFF
-        }
-        pixelCache[cacheKey] := result
-        return result
-    } catch {
-        result := {r: 0, g: 0, b: 0}
-        pixelCache[cacheKey] := result
-        return result
-    }
-}
-
-/**
- * 颜色判断类
- * @param {Integer} r - 红色分量 (0-255)
- * @param {Integer} g - 绿色分量 (0-255) 
- * @param {Integer} b - 蓝色分量 (0-255)
- */
-class ColorDetector {
     ; 蓝色检测
     static IsBlue(color) {
         return (color.b > 60 &&
@@ -2098,7 +2127,7 @@ class ColorDetector {
     ; 红色检测
     static IsRed(color) {
         return (color.r > 60 &&
-                color.r > color.g * 1.2 &&
+                color.r > color.g * 2 &&
                 color.r > color.b * 3 &&
                 color.r - Max(color.g, color.b) > 40)
     }
@@ -2116,29 +2145,6 @@ class ColorDetector {
         return (range < 35 &&
                 avgColor > 10 && 
                 avgColor < 80)
-    }
-}
-
-/**
- * 鼠标自动移动函数
- */
-MoveMouse() {
-    allcoords := WindowManager.GetAllCoord()  ; 获取坐标数据
-
-    try {
-        if (!GUIManager.uCtrl["mouseAutoMove"].Has("currentPoint"))
-            GUIManager.uCtrl["mouseAutoMove"]["currentPoint"] := 1
-
-        currentIndex := GUIManager.uCtrl["mouseAutoMove"]["currentPoint"]
-
-        if (currentIndex < 1 || currentIndex > 6)
-            currentIndex := 1
-
-        currentPoint := allcoords["mouse_move_" currentIndex]
-        MouseMove(currentPoint.x, currentPoint.y, 0)
-
-        GUIManager.uCtrl["mouseAutoMove"]["currentPoint"] := Mod(currentIndex, 6) + 1
-
     }
 }
 
@@ -2192,12 +2198,10 @@ class ConfigManager {
      */
     static SaveProfile(profileName) {
         try {
-            ; 删除
             this.DeleteSection(profileName)
             
             section := profileName
             
-            ; 保存技能设置
             for i in [1, 2, 3, 4, 5] {
                 skillData := GUIManager.cSkill[i]["key"].Value . "," . 
                             GUIManager.cSkill[i]["enable"].Value . "," . 
@@ -2206,7 +2210,6 @@ class ConfigManager {
                 IniWrite(skillData, this.settingsFile, section, "skill" i)
             }
             
-            ; 保存鼠标设置
             leftData := GUIManager.mSkill["left"]["enable"].Value . "," . 
                         GUIManager.mSkill["left"]["interval"].Value . "," . 
                         GUIManager.mSkill["left"]["mode"].Value
@@ -2217,7 +2220,6 @@ class ConfigManager {
                          GUIManager.mSkill["right"]["mode"].Value
             IniWrite(rightData, this.settingsFile, section, "right")
             
-            ; 保存功能键设置
             dodgeData := GUIManager.uCtrl["dodge"]["key"].Value . "," . 
                          GUIManager.uCtrl["dodge"]["enable"].Value . "," . 
                          GUIManager.uCtrl["dodge"]["interval"].Value
@@ -2257,7 +2259,6 @@ class ConfigManager {
             IniWrite(GUIManager.uCtrl["D4only"]["enable"].Value, this.settingsFile, section, "D4only")
             IniWrite(GUIManager.uCtrl["xy"]["x"].Value, this.settingsFile, section, "xyX")
             IniWrite(GUIManager.uCtrl["xy"]["y"].Value, this.settingsFile, section, "xyY")
-            ; 保存热键设置
             IniWrite(GUIManager.startkey["mode"].Value, this.settingsFile, section, "hotkeyMode")
             IniWrite(GUIManager.startkey["userkey"][1].key, this.settingsFile, section, "useHotKey")
             
@@ -2273,7 +2274,6 @@ class ConfigManager {
      */
     static LoadProfile(profileName) {
         try {
-            ; 加载
             section := profileName
 
             for Index in [1, 2, 3, 4, 5]  {
@@ -2304,7 +2304,6 @@ class ConfigManager {
                 GUIManager.mSkill["right"]["mode"].Value := Integer(rightParts[3])
             }
 
-            
             dodgeData := IniRead(this.settingsFile, section, "dodge", "Space,0,20")
             dodgeParts := StrSplit(dodgeData, ",")
             if (dodgeParts.Length >= 3) {
@@ -2369,11 +2368,10 @@ class ConfigManager {
             GUIManager.uCtrl["D4only"]["enable"].Value := IniRead(this.settingsFile, section, "D4only", "1")
             GUIManager.uCtrl["xy"]["x"].Value := IniRead(this.settingsFile, section, "xyX", "0")
             GUIManager.uCtrl["xy"]["y"].Value := IniRead(this.settingsFile, section, "xyY", "0")
-            ; 加载全局热键
             GUIManager.startkey["mode"].Value := IniRead(this.settingsFile, section, "hotkeyMode", "1")
             GUIManager.startkey["userkey"][1].key := IniRead(this.settingsFile, section, "useHotKey", "F1")
             GUIManager.startkey["guiHotkey"].Value := GUIManager.startkey["userkey"][1].key
-            GUIManager.LoadStartHotkey()
+            HotkeyManager.LoadStartHotkey()
 
             return true
             
@@ -2400,13 +2398,13 @@ class ConfigManager {
 
         if (!found) {
             profileList.InsertAt(1, this.defaultProfile)
-            this.Write("Profiles", "List", Join(profileList, "|"))
+            this.Write("Profiles", "List", UtilityHelper.Join(profileList, "|"))
         }
         return profileList
     }
     
     static SaveProfileList(profileList) {
-        return this.Write("Profiles", "List", Join(profileList, "|"))
+        return this.Write("Profiles", "List", UtilityHelper.Join(profileList, "|"))
     }
     
     static GetLastUsedProfile() {
@@ -2581,49 +2579,6 @@ class ConfigManager {
     }
 }
 
-/**
- * 将数组元素用指定分隔符连接
- * @param {Array} arr - 要连接的数组
- * @param {String} delimiter - 分隔符
- * @returns {String} - 连接后的字符串
- */
-Join(arr, delimiter := ",") {
-    result := ""
-    for i, v in arr {
-        result .= (i > 1 ? delimiter : "") . v
-    }
-    return result
-}
-
-/**
- * 调试日志记录函数
- * @param {String} message - 要记录的消息
- */
-DebugLog(message) {
-    if DEBUG {
-        try {
-            logFile := debugLogFile
-            maxSize := 1024 * 1024  ; 1MB
-
-            if FileExist(logFile) {
-                fileObj := FileOpen(logFile, "r")
-                if (fileObj.Length > maxSize) {
-                    fileObj.Close()
-                    FileDelete logFile
-                } else {
-                    fileObj.Close()
-                }
-            }
-
-            timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
-            FileAppend(timestamp . " - " . message . "`n", logFile)
-        } catch as err {
-            OutputDebug "日志写入失败: " err.Message
-        }
-    }
-}
-
-; ==================== 热键处理 ====================
 #HotIf WinActive("ahk_class Diablo IV Main Window Class")
 
 ~LButton::
@@ -2645,5 +2600,4 @@ DebugLog(message) {
     }
 }
 
-; 初始化GUI
 GUIManager.Initialize()
