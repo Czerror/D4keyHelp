@@ -1238,7 +1238,6 @@ class WindowManager {
     static windowInfo := Map()
     static coordCache := Map()
     static lastWindowInfo := unset
-    static D4State := false
     
     ; 常量定义
     static D4_WINDOW_CLASS := "Diablo IV Main Window Class"
@@ -1299,14 +1298,6 @@ class WindowManager {
      */
     static IsD4WindowExists() {
         return WinExist("ahk_class " . this.D4_WINDOW_CLASS)
-    }
-
-    /**
-     * 检查暗黑4窗口是否激活
-     * @returns {Boolean} 窗口是否激活
-     */
-    static IsD4WindowActive() {
-        return WinActive("ahk_class " . this.D4_WINDOW_CLASS)
     }
 
     /**
@@ -1395,32 +1386,6 @@ class WindowManager {
     }
 
     /**
-     * 检测窗口状态并触发相应的暂停/恢复操作
-     */
-    static CheckWindowStatus() {
-        try {
-            d4Only := GUIManager.uCtrl["D4only"]["enable"].Value
-            
-            if (d4Only) {
-                ; D4only模式：只在暗黑4窗口激活时运行
-                isActive := this.IsD4WindowActive()
-                if (this.D4State != isActive) {
-                    this.D4State := isActive
-                    MacroController.TogglePause("window", !isActive)
-                }
-            } else {
-                ; 普通模式：在任何窗口运行，但避免在GUI窗口运行
-                if (WinActive("ahk_class AutoHotkeyGUI") || InStr(WinGetTitle("A"), "暗黑4助手")) {
-                    MacroController.TogglePause("window", true)
-                } else {
-                    MacroController.TogglePause("window", false)
-                }
-            }
-        } catch {
-        }
-    }
-
-    /**
      * 重置所有缓存
      */
     static ResetCache() {
@@ -1428,30 +1393,6 @@ class WindowManager {
         this.windowInfo.Clear()
         this.lastWindowInfo := unset
         this.D4State := false
-    }
-
-    /**
-     * 获取窗口标题
-     * @returns {String} 当前活动窗口标题
-     */
-    static GetActiveWindowTitle() {
-        try {
-            return WinGetTitle("A")
-        } catch {
-            return ""
-        }
-    }
-
-    /**
-     * 获取窗口类名
-     * @returns {String} 当前活动窗口类名
-     */
-    static GetActiveWindowClass() {
-        try {
-            return WinGetClass("A")
-        } catch {
-            return ""
-        }
     }
 }
 
@@ -1462,7 +1403,7 @@ class WindowManager {
  * @author Archenemy
  */
 class PerfectCraftingManager {
-    ; 静态属性 - 精造模式配置
+    ; 精造模式坐标配置
     static coordConfig := Map(
         "Up", {x: 970, y: 1835},        ; 升级按钮
         "res", {x: 865, y: 725},        ; 结果区域
@@ -1470,7 +1411,7 @@ class PerfectCraftingManager {
         "skip", {x: 690, y: 1650}       ; 跳过按钮
     )
     
-    ; 精造时机常量
+    ; 相位时机常量
     static LEGENDARY := 5        ; 传奇总阶段数
     static RARE := 4            ; 暗金总阶段数
     static CLICK_DELAY := 130          ; 点击间隔(ms)
@@ -1494,10 +1435,10 @@ class PerfectCraftingManager {
      */
     static GetPreciseTime() {
         static freq := 0
-        static counter := 0
         if (freq = 0) {
             DllCall("QueryPerformanceFrequency", "Int64*", &freq)
         }
+        counter := 0
         DllCall("QueryPerformanceCounter", "Int64*", &counter)
         return (counter * 1000000) // freq
     }
@@ -1645,40 +1586,6 @@ class PerfectCraftingManager {
         
         UtilityHelper.DebugLog("精造数据已重置")
     }
-
-    /**
-     * 验证配置参数的有效性
-     * @param {Object} config - 配置参数
-     * @returns {Boolean} 参数是否有效
-     */
-    static ValidateConfig(config) {
-        if (config.correct < 1 || config.correct > 5) {
-            return false
-        }
-        if (config.xiuValue < 1 || config.xiuValue > 5) {
-            return false
-        }
-        if (config.trueTime <= 0) {
-            return false
-        }
-        return true
-    }
-
-    /**
-     * 获取精造模式状态信息
-     * @returns {Object} 状态信息
-     */
-    static GetStatus() {
-        config := this.GetCraftingConfig()
-        timing := this.CalculateTiming(config)
-        
-        return {
-            isValid: this.ValidateConfig(config),
-            config: config,
-            timing: timing,
-            hasStartTime: GUIManager.uCtrl["PM"]["time"] != 0
-        }
-    }
 }
 
 /**
@@ -1695,10 +1602,8 @@ class PauseDetector {
     static tabResumeHitCount := 0
     static enterPauseMissCount := 0
     static enterResumeHitCount := 0
-
     static PAUSE_THRESHOLD := 2
     static RESUME_THRESHOLD := 2
-
     static CheckTimer := Map()
 
     /**
@@ -1788,7 +1693,14 @@ class PauseDetector {
      * 窗口切换检查函数
      */
     static CheckWindow() {
-        WindowManager.CheckWindowStatus()
+        d4only := GUIManager.uCtrl["D4only"]["enable"].Value
+        pause := false
+        if (d4only) {
+            pause := !WinActive("ahk_class Diablo IV Main Window Class")
+        } else {
+            pause := WinActive("ahk_class AutoHotkeyGUI") || InStr(WinGetTitle("A"), "暗黑4助手")
+        }
+        MacroController.TogglePause("window", pause)
     }
 
     /**
@@ -1801,10 +1713,12 @@ class PauseDetector {
         dfxCoord := allcoords["skill_bar_blue"]
         tabCoord := allcoords["tab_interface_red"]
 
-        colorDFX := IsSet(pixelCache) && pixelCache.Has(dfxCoord.x . "," . dfxCoord.y) ? 
-            pixelCache[dfxCoord.x . "," . dfxCoord.y] : ColorDetector.GetPixelRGB(dfxCoord.x, dfxCoord.y)
-        colorTAB := IsSet(pixelCache) && pixelCache.Has(tabCoord.x . "," . tabCoord.y) ? 
-            pixelCache[tabCoord.x . "," . tabCoord.y] : ColorDetector.GetPixelRGB(tabCoord.x, tabCoord.y)
+        colorDFX := IsSet(pixelCache) && pixelCache.Has(dfxCoord.x . "," . dfxCoord.y)
+            ? pixelCache[dfxCoord.x . "," . dfxCoord.y]
+            : ColorDetector.GetPixelRGB(dfxCoord.x, dfxCoord.y)
+        colorTAB := IsSet(pixelCache) && pixelCache.Has(tabCoord.x . "," . tabCoord.y)
+            ? pixelCache[tabCoord.x . "," . tabCoord.y]
+            : ColorDetector.GetPixelRGB(tabCoord.x, tabCoord.y)
 
         return {
             isBlueColor: ColorDetector.IsBlue(colorDFX), 
@@ -1827,8 +1741,9 @@ class PauseDetector {
             coord := allcoords[grayPoint]
             key := coord.x . "," . coord.y
             
-            grayColor := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
-                pixelCache[key] : ColorDetector.GetPixelRGB(coord.x, coord.y)
+            grayColor := (IsSet(pixelCache) && pixelCache.Has(key))
+                ? pixelCache[key]
+                : ColorDetector.GetPixelRGB(coord.x, coord.y)
 
             if (!ColorDetector.IsGray(grayColor))
                 return false
@@ -1837,8 +1752,9 @@ class PauseDetector {
                 coord := allcoords[point]
                 key := coord.x . "," . coord.y
                 
-                colorObj := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
-                    pixelCache[key] : ColorDetector.GetPixelRGB(coord.x, coord.y)
+                colorObj := (IsSet(pixelCache) && pixelCache.Has(key))
+                    ? pixelCache[key]
+                    : ColorDetector.GetPixelRGB(coord.x, coord.y)
 
                 if (ColorDetector.IsRed(colorObj)) {
                     return true
