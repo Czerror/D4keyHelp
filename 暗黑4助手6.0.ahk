@@ -575,7 +575,6 @@ class UtilityHelper {
                         fileObj.Close()
                     }
                 }
-
                 timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
                 FileAppend(timestamp . " - " . message . "`n", logFile)
             } catch as err {
@@ -683,7 +682,7 @@ class MacroController {
             config.state := false
         }
         
-        if (GUIManager.uCtrl["D4only"]["enable"].Value == 1) {
+        if (GUIManager.uCtrl["D4only"]["enable"].Value) {
             WindowManager.GetAllCoord()
             if (GUIManager.uCtrl["mouseAutoMove"]["enable"].Value) {
                 UtilityHelper.StartMove()
@@ -732,8 +731,8 @@ class MacroController {
      */
     static ReleaseAllKeys() {
         KeyHandler.ResetHoldStates()
-        
-        if GUIManager.uCtrl["shift"]["enable"].Value {
+
+        if (GUIManager.uCtrl["shift"]["enable"].Value) {
             Send "{Blind}{Shift up}"
         }
     }
@@ -868,17 +867,17 @@ class KeyHandler {
     static _GetConfig(category, id) {
         switch category {
             case "skill":
-                if (!GUIManager.cSkill.Has(id) || GUIManager.cSkill[id]["enable"].Value != 1)
-                    return false
-                return GUIManager.cSkill[id]
+                return (GUIManager.cSkill.Has(id) && GUIManager.cSkill[id]["enable"].Value) 
+                    ? GUIManager.cSkill[id] 
+                    : false
             case "mouse":
-                if (!GUIManager.mSkill.Has(id) || GUIManager.mSkill[id]["enable"].Value != 1)
-                    return false
-                return GUIManager.mSkill[id]
+                return (GUIManager.mSkill.Has(id) && GUIManager.mSkill[id]["enable"].Value) 
+                    ? GUIManager.mSkill[id] 
+                    : false
             case "uSkill":
-                if (!GUIManager.uCtrl.Has(id) || GUIManager.uCtrl[id]["enable"].Value != 1)
-                    return false
-                return GUIManager.uCtrl[id]
+                return (GUIManager.uCtrl.Has(id) && GUIManager.uCtrl[id]["enable"].Value) 
+                    ? GUIManager.uCtrl[id] 
+                    : false
             default:
                 return false
         }
@@ -909,17 +908,15 @@ class KeyHandler {
             coord: coord
         }
      
-        ; D4only模式下模式调整
-        if (!GUIManager.uCtrl["D4only"]["enable"].Value) {
-            if (keyData.mode == 2 || keyData.mode == 4) {
-                keyData.mode := 1
-            }
-        }
+        ; 模式调整
+        keyData.mode := (!GUIManager.uCtrl["D4only"]["enable"].Value && (keyData.mode == 2 || keyData.mode == 4)) 
+            ? 1 
+            : keyData.mode
 
         ; 随机间隔调整
-        if (GUIManager.uCtrl["random"]["enable"].Value == 1) {
-            keyData.interval += Random(1, GUIManager.uCtrl["random"]["max"].Value)
-        }
+        keyData.interval += GUIManager.uCtrl["random"]["enable"].Value 
+            ? Random(1, GUIManager.uCtrl["random"]["max"].Value) 
+            : 0
 
         return keyData
     }
@@ -1402,9 +1399,9 @@ class WindowManager {
      */
     static CheckWindowStatus() {
         try {
-            d4OnlyMode := GUIManager.uCtrl["D4only"]["enable"].Value == 1
+            d4Only := GUIManager.uCtrl["D4only"]["enable"].Value
             
-            if (d4OnlyMode) {
+            if (d4Only) {
                 ; D4only模式：只在暗黑4窗口激活时运行
                 isActive := this.IsD4WindowActive()
                 if (this.D4State != isActive) {
@@ -1419,8 +1416,7 @@ class WindowManager {
                     MacroController.TogglePause("window", false)
                 }
             }
-        } catch as err {
-            UtilityHelper.DebugLog("窗口状态检测失败: " . err.Message)
+        } catch {
         }
     }
 
@@ -1740,9 +1736,9 @@ class PauseDetector {
      */
     static GetTimerConfig() {
 
-        d4onlyEnabled := GUIManager.uCtrl["D4only"]["enable"].Value
-        bloodEnabled := GUIManager.uCtrl["ipPause"]["enable"].Value
-        tabEnabled := GUIManager.uCtrl["tabPause"]["enable"].Value
+        d4Only := GUIManager.uCtrl["D4only"]["enable"].Value
+        blood := GUIManager.uCtrl["ipPause"]["enable"].Value
+        tab := GUIManager.uCtrl["tabPause"]["enable"].Value
         
         bloodInterval := (
             GUIManager.uCtrl.Has("ipPause") && GUIManager.uCtrl["ipPause"].Has("interval")
@@ -1764,13 +1760,13 @@ class PauseDetector {
         
         this.CheckTimer["AutoPauseByBlood"] := {
             func: () => this.AutoPauseByBlood(),
-            enabled: d4onlyEnabled && bloodEnabled,  ; 血条检测依赖d4only模式
+            enabled: d4Only && blood,  ; 血条检测依赖d4only模式
             interval: bloodInterval
         }
         
         this.CheckTimer["AutoPauseByTAB"] := {
             func: () => this.AutoPauseByTAB(),
-            enabled: d4onlyEnabled && tabEnabled,    ; TAB检测依赖d4only模式
+            enabled: d4Only && tab,    ; TAB检测依赖d4only模式
             interval: tabInterval
         }
     }
@@ -2585,7 +2581,7 @@ class ConfigManager {
 {
     static lastClickTime := 0
 
-    if (GUIManager.uCtrl["dcPause"]["enable"].Value != 1)
+    if (!GUIManager.uCtrl["dcPause"]["enable"].Value)
         return
 
     currentTime := A_TickCount
