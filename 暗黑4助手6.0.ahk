@@ -2052,11 +2052,13 @@ class ColorDetector {
     }
     ; 灰色检测
     static IsGray(color) {
-        range := Max(color.r, color.g, color.b) - Min(color.r, color.g, color.b)
+        mixcolor := Max(color.r, color.g, color.b)
+        mincolor := Min(color.r, color.g, color.b)
+        range := mixcolor - mincolor
         avgColor := (color.r + color.g + color.b) / 3
         return (range < 40 &&
                 avgColor > 10 && 
-                avgColor < 80)
+                mixcolor < 80)
     }
 }
 
