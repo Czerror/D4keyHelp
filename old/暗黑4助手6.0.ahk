@@ -1119,8 +1119,8 @@ class KeyQueueManager {
             priority: priority
         }
 
-        if (keyData.HasProp("Coord")) {
-            item.Coord := keyData.Coord
+        if (keyData.HasProp("coord")) {
+            item.Coord := keyData.coord
         }
 
         if (existingIndex > 0)

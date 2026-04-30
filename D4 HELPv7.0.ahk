@@ -30,7 +30,7 @@ class GUIManager {
      * 创建主窗口、托盘菜单和所有控件
      */
     static Initialize() {
-        this.myGui := Gui("", "LGBT HELP")
+        this.myGui := Gui("", "D4 HELP v7.0 by Archenemy")
         this.myGui.BackColor := "FFFFFF"
         this.myGui.SetFont("s10", "Microsoft YaHei UI")
         this.InitializeTrayMenu()
@@ -118,8 +118,6 @@ class GUIManager {
         this.CreateAutoStopControls()
         ; 工具模式
         this.tabControl.UseTab(2)
-        ; 精造模式控件
-        this.CreatePerfectModeControls()
         ; 窗口置顶控件
         this.CreateWindowTopControls()
         
@@ -295,41 +293,6 @@ class GUIManager {
         )
     }
     
-    /**
-     * 创建精造模式控件
-     */
-    static CreatePerfectModeControls() {
-        this.uCtrl["PM"] := Map(
-            "mod", this.myGui.AddDropDownList("x90 y178 w60 h60 Choose1", ["暗金", "传奇"]),
-            "trueTime", this.myGui.AddEdit("x270 y178 w40 h20", "120"),
-            "modtime", this.myGui.AddEdit("x390 y178 w40 h20", "0"),
-            "time", 0,
-            "time1", this.myGui.AddEdit("x90 y210 w300 h20", "0"),
-            "timeX", this.myGui.AddEdit("x90 y240 w300 h20", "0"),
-            "correct", this.myGui.AddEdit("x120 y270 w20 h20", "1"),
-            "xiuValue", this.myGui.AddEdit("x120 y300 w20 h20", "1")
-        )
-        
-        this.uCtrl["PM"]["time1"].Enabled := false
-        this.uCtrl["PM"]["timeX"].Enabled := false
-        this.uCtrl["PM"]["correct"].OnEvent("LoseFocus", (*) => (
-            UtilityHelper.LimitEditValue(this.uCtrl["PM"]["correct"], 1, 5)
-        ))
-        this.uCtrl["PM"]["xiuValue"].OnEvent("LoseFocus", (*) => (
-            UtilityHelper.LimitEditValue(this.uCtrl["PM"]["xiuValue"], 1, 5)
-        ))
-        
-        this.myGui.AddText("x30 y180 w60 h20", "精造模式:")
-        this.myGui.AddText("x180 y180 w90 h20", "窗口周期(ms):")
-        this.myGui.AddText("x330 y180 w60 h20", "偏差修正:")
-        this.myGui.AddText("x30 y210 w60 h20", "记录时间:")
-        this.myGui.AddText("x30 y240 w60 h20", "时间偏差:")
-        this.myGui.AddText("x30 y270 w90 h20", "实际命中词条:")
-        this.myGui.AddText("x30 y300 w90 h20", "期望命中词条:")
-        this.myGui.AddButton("x30 y330 w60 h40", "开始").OnEvent("Click", (*) => PerfectCraftingManager.ExecuteStart())
-        this.myGui.AddButton("x110 y330 w60 h40", "继续").OnEvent("Click", (*) => PerfectCraftingManager.ExecuteNext())
-        this.myGui.AddButton("x200 y330 w60 h40", "重置").OnEvent("Click", (*) => PerfectCraftingManager.ExecuteReset())
-    }
     
     /**
      * 创建窗口置顶控件
@@ -617,6 +580,7 @@ class MacroController {
             for reason, config in this.pauseConfig {
                 config.state := false
             }
+            WindowManager.ResetCache()
             GUIManager.UpdateStatus("已停止", "宏已停止")
         }
     }
@@ -769,7 +733,7 @@ class KeyHandler {
 
         switch keyData.mode {
             case 2: ; BUFF模式
-                if (this.IsSkillActive(keyData.id)) {
+                if (this.IsSkillActive(keyData.id, keyData.coord)) {
                     return
                 } else {
                     this._ExecuteKey(keyData, shiftEnabled)
@@ -1064,35 +1028,43 @@ class KeyHandler {
 
 /**
  * 按键队列管理器类
- * @param {Object} keyData
- * @description 管理按键队列，处理按键事件的入队、出队和执行逻辑
- * @version 1.0.0
+ * 负责管理按键队列，处理按键事件的入队、出队和执行逻辑
+ * @version 2.0.0
  * @author Archenemy
  */
 class KeyQueueManager {
-    static keyQueue := []
-    static lastExec := Map()
-    static maxLen := 15
-    static QueueTimer := 0
-    static QueueWorkerFunc := 0
+    static keyConfigCache := Map()      ; 按键配置缓存 {uniqueKey: config}
+    static expectedNext := Map()        ; 预计下次执行时刻 {uniqueKey: timestamp}
+    static sequenceStartTime := 0       ; 序列启动时刻
+    static isRunning := false           ; 队列运行状态
+    static QueueWorkerFunc := 0         ; 工作函数引用
+    static POLL_INTERVAL := 5           ; 轮询间隔(ms)
+    static MAX_OVERSHOOT_RATIO := 0.5   ; 最大过冲矫正比例
     
+    /**
+     * 启动队列
+     */
     static StartQueue() {
         this.StopQueue()
+        this.sequenceStartTime := A_TickCount
+        this.isRunning := true
         if (this.QueueWorkerFunc == 0) {
-            this.QueueWorkerFunc := () => this.KeyQueueWorker()
+            this.QueueWorkerFunc := () => this.ProcessCycle()
         }
-        SetTimer(this.QueueWorkerFunc, 10)
-        this.QueueTimer := 1
+        SetTimer(this.QueueWorkerFunc, this.POLL_INTERVAL)
     }
     
+    /**
+     * 停止队列
+     */
     static StopQueue() {
-        this.QueueTimer := 0
+        this.isRunning := false
         if (this.QueueWorkerFunc != 0) {
             SetTimer(this.QueueWorkerFunc, 0)
         }
         this.ClearQueue()
     }
-
+    
     /**
      * 键位入队函数
      * @param {Object} keyData - 按键数据
@@ -1100,55 +1072,22 @@ class KeyQueueManager {
     static EnqueueKey(keyData) {
         uniqueKey := keyData.uniqueKey
         priority := this.GetPriority(keyData.mode, keyData.id)
-        now := A_TickCount
-        existingIndex := 0
-        for index, item in this.keyQueue {
-            if (item.uniqueKey = uniqueKey) {
-                existingIndex := index
-                break
-            }
-        }
-
-        item := {
+        config := {
             key: keyData.key,
             mode: keyData.mode,
             interval: keyData.interval,
+            originalInterval: keyData.interval,
             id: keyData.id,
-            uniqueKey: keyData.uniqueKey,
-            time: now,
+            uniqueKey: uniqueKey,
+            coord: keyData.coord,
             priority: priority
         }
-
-        if (keyData.HasProp("Coord")) {
-            item.Coord := keyData.Coord
-        }
-
-        if (existingIndex > 0)
-            this.keyQueue.RemoveAt(existingIndex)
-
-        if (this.keyQueue.Length >= KeyQueueManager.maxLen) {
-            this.keyQueue.RemoveAt(this.keyQueue.Length)
-        }
-
-        if (this.keyQueue.Length == 0) {
-            this.keyQueue.Push(item)
-            return
-        }
-
-        inserted := false
-        loop this.keyQueue.Length {
-            if (priority > this.keyQueue[A_Index].priority) {
-                this.keyQueue.InsertAt(A_Index, item)
-                inserted := true
-                break
-            }
-        }
-
-        if (!inserted) {
-            this.keyQueue.Push(item)
+        this.keyConfigCache[uniqueKey] := config
+        if (!this.expectedNext.Has(uniqueKey)) {
+            this.expectedNext[uniqueKey] := A_TickCount - keyData.interval
         }
     }
-
+    
     /**
      * 优先级计算函数
      * @param {Integer} mode - 按键模式
@@ -1160,7 +1099,7 @@ class KeyQueueManager {
             case 4: return 4
             case 2: return 3
             case 3: return 2
-            case 1: 
+            case 1:
                 if (id = "dodge" || id = "potion" || id = "forceMove") {
                     return 5
                 }
@@ -1168,62 +1107,83 @@ class KeyQueueManager {
             default: return 0
         }
     }
-
+    
     /**
      * 队列处理器
-     * @description 处理队列中的按键事件
+     * @description 快照收集到期按键，按优先级排序后批量执行，消除原逆序变异导致的索引混乱
      */
-    static KeyQueueWorker() {
-        if (this.QueueTimer = 0) {
+    static ProcessCycle() {
+        if (!this.isRunning) {
             return
         }
-        
         now := A_TickCount
-        i := this.keyQueue.Length
-        while (i >= 1) {
-            if (this.keyQueue.Length == 0 || i > this.keyQueue.Length) {
-                break
+        dueEntries := []
+        for uniqueKey, config in this.keyConfigCache {
+            nextExec := this.expectedNext.Get(uniqueKey, 0)
+            if (now >= nextExec) {
+                dueEntries.Push({config: config, overshoot: now - nextExec})
             }
-            
-            item := this.keyQueue[i]
-            uniqueKey := item.uniqueKey
-            lastExecTime := this.lastExec.Get(uniqueKey, 0)
-
-            if (item.mode == 3) {
-                if (KeyHandler.holdStates.Has(uniqueKey) && KeyHandler.holdStates[uniqueKey]) {
-                    i--
-                    continue
-                }
-                KeyHandler.HandleKeyMode(item)
-                this.lastExec[uniqueKey] := now
-
-                if (i <= this.keyQueue.Length) {
-                    this.keyQueue.RemoveAt(i)
-                }
-                i--
-                continue
-            }
-
-            if ((now - lastExecTime) >= item.interval) {
-                KeyHandler.HandleKeyMode(item)
-                this.lastExec[uniqueKey] := now
-                if (item.mode != 3) {
-                    if (i <= this.keyQueue.Length) {
-                        this.keyQueue.RemoveAt(i)
-                        this.EnqueueKey(item)
-                    }
-                }
-            }
-            i--
+        }
+        if (dueEntries.Length == 0) {
+            return
+        }
+        this.SortDueEntries(dueEntries)
+        for entry in dueEntries {
+            this.ExecuteKeyWithCorrection(entry.config, entry.overshoot, now)
         }
     }
-
+    
+    /**
+     * 排序到期按键
+     * @param {Array} entries - 到期按键数组
+     */
+    static SortDueEntries(entries) {
+        loop entries.Length - 1 {
+            loop entries.Length - A_Index {
+                left := entries[A_Index]
+                right := entries[A_Index + 1]
+                if (left.config.priority < right.config.priority
+                    || (left.config.priority == right.config.priority && left.overshoot < right.overshoot)) {
+                    entries[A_Index] := right
+                    entries[A_Index + 1] := left
+                }
+            }
+        }
+    }
+    
+    /**
+     * 执行按键并应用时间比率矫正
+     * @param {Object} config - 按键配置
+     * @param {Integer} overshoot - 过冲量(ms)
+     * @param {Integer} now - 当前时刻
+     */
+    static ExecuteKeyWithCorrection(config, overshoot, now) {
+        uniqueKey := config.uniqueKey
+        if (config.mode == 3) {
+            if (KeyHandler.holdStates.Has(uniqueKey) && KeyHandler.holdStates[uniqueKey]) {
+                return
+            }
+            KeyHandler.HandleKeyMode(config)
+            this.expectedNext.Delete(uniqueKey)
+            this.keyConfigCache.Delete(uniqueKey)
+            return
+        }
+        KeyHandler.HandleKeyMode(config)
+        correction := 0
+        if (overshoot > 0 && overshoot < config.originalInterval) {
+            correction := Min(overshoot, Floor(config.originalInterval * this.MAX_OVERSHOOT_RATIO))
+        }
+        correctedInterval := Max(config.originalInterval - correction, 5)
+        this.expectedNext[uniqueKey] := now + correctedInterval
+        config.interval := config.originalInterval
+    }
+    
     /**
      * 清空队列
      */
     static ClearQueue() {
-        this.keyQueue := []
-        this.lastExec.Clear()
+        this.keyConfigCache.Clear()
+        this.expectedNext.Clear()
     }
 }
 
@@ -1347,6 +1307,7 @@ class WindowManager {
 
         this.lastWindowInfo := currentWindowInfo.Clone()
         this.coordCache := Map()
+        KeyHandler.ClearCoordCache()
 
         ; 预定义的坐标配置
         static coordConfig := Map(
@@ -1393,198 +1354,7 @@ class WindowManager {
         this.windowInfo.Clear()
         this.lastWindowInfo := unset
         this.D4State := false
-    }
-}
-
-/**
- * 精造模式管理类
- * 负责精造时机计算、界面坐标管理和执行流程控制
- * @version 1.0.0
- * @author Archenemy
- */
-class PerfectCraftingManager {
-    ; 精造模式坐标配置
-    static coordConfig := Map(
-        "Up", {x: 970, y: 1835},        ; 升级按钮
-        "res", {x: 865, y: 725},        ; 结果区域
-        "fix", {x: 540, y: 1900},       ; 修复按钮
-        "skip", {x: 690, y: 1650}       ; 跳过按钮
-    )
-    
-    ; 相位时机常量
-    static LEGENDARY := 5        ; 传奇总阶段数
-    static RARE := 4            ; 暗金总阶段数
-    static CLICK_DELAY := 130          ; 点击间隔(ms)
-    static PREP_DELAY := 150           ; 准备延迟(ms)
-
-    /**
-     * 获取转换后的坐标映射
-     * @returns {Map} 转换后的坐标映射
-     */
-    static GetCoordinates() {
-        coordMap := Map()
-        for key, coord in this.coordConfig {
-            coordMap[key] := WindowManager.ConvertCoord(coord)
-        }
-        return coordMap
-    }
-
-    /**
-     * 获取高精度时间戳（微秒）
-     * @returns {Integer} 高精度时间戳
-     */
-    static GetPreciseTime() {
-        static freq := 0
-        if (freq = 0) {
-            DllCall("QueryPerformanceFrequency", "Int64*", &freq)
-        }
-        counter := 0
-        DllCall("QueryPerformanceCounter", "Int64*", &counter)
-        return (counter * 1000000) // freq
-    }
-
-    /**
-     * 激活暗黑4窗口
-     */
-    static ActivateD4Window() {
-        if (WindowManager.IsD4WindowExists()) {
-            WinActivate("ahk_class " . WindowManager.D4_WINDOW_CLASS)
-        }
-    }
-
-    /**
-     * 获取精造配置参数
-     * @returns {Object} 配置参数对象
-     */
-    static GetCraftingConfig() {
-        return {
-            modTime: GUIManager.uCtrl["PM"]["modtime"].Value * 1000,
-            mode: GUIManager.uCtrl["PM"]["mod"].Value,
-            trueTime: GUIManager.uCtrl["PM"]["trueTime"].Value * 1000,
-            correct: GUIManager.uCtrl["PM"]["correct"].Value,
-            xiuValue: GUIManager.uCtrl["PM"]["xiuValue"].Value
-        }
-    }
-
-    /**
-     * 计算精造时机参数
-     * @param {Object} config - 配置参数
-     * @returns {Object} 时机计算结果
-     */
-    static CalculateTiming(config) {
-        totalPhases := (config.mode = 1) ? this.RARE : this.LEGENDARY
-        needTime := config.trueTime * totalPhases
-        
-        return {
-            totalPhases: totalPhases,
-            needTime: needTime,
-            targetCenter: Mod((config.xiuValue - config.correct) * config.trueTime + (config.trueTime / 5), needTime)
-        }
-    }
-
-    /**
-     * 执行开始流程
-     */
-    static ExecuteStart() {
-        this.ActivateD4Window()
-        coord := this.GetCoordinates()
-        
-        Sleep(this.PREP_DELAY)
-        MouseMove(coord["Up"].x, coord["Up"].y)
-        Sleep(this.PREP_DELAY)
-        
-        ; 前3次准备点击
-        Loop 3 {
-            Click
-            Sleep(this.PREP_DELAY)
-        }
-        
-        ; 记录开始时间并执行第4次点击
-        startTime := this.GetPreciseTime()
-        Click
-        
-        GUIManager.uCtrl["PM"]["time1"].Value := FormatTime(, "HH:mm:ss") . "." . Format("{:03}", Mod(Round(startTime/1000), 1000))
-        GUIManager.uCtrl["PM"]["time"] := startTime
-        
-        UtilityHelper.DebugLog("精造开始 - 时间: " . startTime)
-    }
-
-    /**
-     * 执行继续流程
-     */
-    static ExecuteNext() {
-        this.ActivateD4Window()
-        config := this.GetCraftingConfig()
-        timing := this.CalculateTiming(config)
-        coord := this.GetCoordinates()
-        startTime := GUIManager.uCtrl["PM"]["time"]
-        
-        ; 前3次点击
-        MouseMove(coord["Up"].x, coord["Up"].y)
-        Loop 3 {
-            Click
-            Sleep(this.CLICK_DELAY)
-        }
-        
-        currentTime := this.GetPreciseTime()
-        elapsedTime := currentTime - startTime
-        currentPhase := Mod(elapsedTime, timing.needTime)
-        waitTime := Mod(timing.targetCenter - currentPhase + timing.needTime, timing.needTime)
-        
-        ; 确保等待时间合理
-        if (waitTime < config.trueTime / 2) {
-            waitTime += timing.needTime
-        }
-        
-        ; 精确等待到目标时间
-        targetTime := currentTime + waitTime - config.modTime
-        while (targetTime > this.GetPreciseTime()) {
-            Sleep(0)
-        }
-        
-        Click
-        endTime := this.GetPreciseTime()
-        
-        this.CalculateAndDisplayResult(startTime, endTime, config, timing)
-        
-        UtilityHelper.DebugLog("精造继续 - 开始: " . startTime . " 结束: " . endTime)
-    }
-
-    /**
-     * 计算并显示精造结果
-     * @param {Integer} startTime - 开始时间
-     * @param {Integer} endTime - 结束时间
-     * @param {Object} config - 配置参数
-     * @param {Object} timing - 时机参数
-     */
-    static CalculateAndDisplayResult(startTime, endTime, config, timing) {
-        totalElapsed := endTime - startTime
-        finalPhase := Mod(totalElapsed, timing.needTime)
-        
-        phaseIndex := Floor(finalPhase / config.trueTime)
-        actualFixedPhase := Mod(config.correct + phaseIndex - 1, timing.totalPhases) + 1
-        
-        phaseDeviation := finalPhase - timing.targetCenter + config.modTime
-        
-        resultText := "总耗时:" . Floor(totalElapsed/1000) . "ms 实际窗口:" . actualFixedPhase . "/" . config.xiuValue . " 偏差: " . Round(phaseDeviation/1000) . "ms"
-        GUIManager.uCtrl["PM"]["timeX"].Value := resultText
-        
-        UtilityHelper.DebugLog("精造结果 - " . resultText)
-    }
-
-    /**
-     * 重置精造数据
-     */
-    static ExecuteReset() {
-
-        GUIManager.uCtrl["PM"]["time"] := 0
-        
-        GUIManager.uCtrl["PM"]["time1"].Value := ""
-        GUIManager.uCtrl["PM"]["timeX"].Value := ""
-        GUIManager.uCtrl["PM"]["correct"].Value := 1
-        GUIManager.uCtrl["PM"]["xiuValue"].Value := 1
-        
-        UtilityHelper.DebugLog("精造数据已重置")
+        KeyHandler.ClearCoordCache()
     }
 }
 
