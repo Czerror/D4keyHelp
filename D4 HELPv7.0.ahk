@@ -1201,7 +1201,7 @@ class WindowManager {
     ; 静态属性 - 窗口信息缓存
     static windowInfo := Map()
     static coordCache := Map()
-    static lastWindowInfo := unset
+    static lastWindowInfo := Map()
     
     ; 常量定义
     static D4_WINDOW_CLASS := "Diablo IV Main Window Class"
@@ -1297,18 +1297,12 @@ class WindowManager {
      */
     static GetAllCoord() {
         currentWindowInfo := this.GetWindowInfo()
-
-        try {
-            if (this.lastWindowInfo.Has("D4W") && this.coordCache.Count > 0) {
-                if (this.lastWindowInfo["D4W"] == currentWindowInfo["D4W"] && 
-                    this.lastWindowInfo["D4H"] == currentWindowInfo["D4H"]) {
-                    return this.coordCache
-                }
+        if (this.lastWindowInfo.Has("D4W") && this.coordCache.Count > 0) {
+            if (this.lastWindowInfo["D4W"] == currentWindowInfo["D4W"] &&
+                this.lastWindowInfo["D4H"] == currentWindowInfo["D4H"]) {
+                return this.coordCache
             }
-        } catch {
-            ; 如果访问属性出错，说明还未初始化，继续执行初始化逻辑
         }
-
         this.lastWindowInfo := currentWindowInfo.Clone()
         this.coordCache := Map()
         KeyHandler.ClearCoordCache()
@@ -1356,7 +1350,7 @@ class WindowManager {
     static ResetCache() {
         this.coordCache.Clear()
         this.windowInfo.Clear()
-        this.lastWindowInfo := unset
+        this.lastWindowInfo := Map()
         this.D4State := false
         KeyHandler.ClearCoordCache()
     }
@@ -1851,9 +1845,8 @@ class ColorDetector {
 class ConfigManager {
     static settingsFile := A_ScriptDir "\settings.ini"
     static defaultProfile := "默认"
-    
     /**
-     * 写入
+     * 写入INI键值，自动转换为字符串
      */
     static Write(section, key, value) {
         try {
@@ -1863,9 +1856,8 @@ class ConfigManager {
             return false
         }
     }
-    
     /**
-     * 读取
+     * 读取INI键值，失败时返回默认值
      */
     static Read(section, key, defaultValue := "") {
         try {
@@ -1874,9 +1866,8 @@ class ConfigManager {
             return String(defaultValue)
         }
     }
-    
     /**
-     * 删除
+     * 删除整个INI节
      */
     static DeleteSection(section) {
         try {
@@ -1886,233 +1877,129 @@ class ConfigManager {
             return false
         }
     }
-    
+    /** 将值数组连接为CSV字符串 */
+    static _Join(values) {
+        result := ""
+        for i, v in values {
+            result .= (i > 1 ? "," : "") . v
+        }
+        return result
+    }
+    /** 从控件Map提取字段值并序列化写入INI */
+    static _SaveCtrl(section, key, ctrlMap, fields) {
+        values := []
+        for field in fields {
+            values.Push(ctrlMap[field].Value)
+        }
+        this.Write(section, key, this._Join(values))
+    }
+    /** 从INI读取CSV并按字段定义回填控件Map */
+    static _LoadCtrl(section, key, ctrlMap, fieldDefs, defaultCSV) {
+        parts := StrSplit(this.Read(section, key, defaultCSV), ",")
+        if (parts.Length < fieldDefs.Length) {
+            return
+        }
+        for i, fieldDef in fieldDefs {
+            ctrlMap[fieldDef.name].Value := (fieldDef.isInt ? Integer(parts[i]) : parts[i])
+        }
+    }
     /**
-     * 保存
+     * 将当前UI配置序列化写入INI
      */
     static SaveProfile(profileName) {
         try {
             this.DeleteSection(profileName)
-            
             section := profileName
-            
             for i in [1, 2, 3, 4, 5] {
-                skillData := GUIManager.cSkill[i]["key"].Value . "," . 
-                            GUIManager.cSkill[i]["enable"].Value . "," . 
-                            GUIManager.cSkill[i]["interval"].Value . "," . 
-                            GUIManager.cSkill[i]["mode"].Value
-                IniWrite(skillData, this.settingsFile, section, "skill" i)
+                this._SaveCtrl(section, "skill" i, GUIManager.cSkill[i], ["key", "enable", "interval", "mode"])
             }
-            
-            leftData := GUIManager.mSkill["left"]["enable"].Value . "," . 
-                        GUIManager.mSkill["left"]["interval"].Value . "," . 
-                        GUIManager.mSkill["left"]["mode"].Value
-            IniWrite(leftData, this.settingsFile, section, "left")
-            
-            rightData := GUIManager.mSkill["right"]["enable"].Value . "," . 
-                         GUIManager.mSkill["right"]["interval"].Value . "," . 
-                         GUIManager.mSkill["right"]["mode"].Value
-            IniWrite(rightData, this.settingsFile, section, "right")
-            
-            dodgeData := GUIManager.uCtrl["dodge"]["key"].Value . "," . 
-                         GUIManager.uCtrl["dodge"]["enable"].Value . "," . 
-                         GUIManager.uCtrl["dodge"]["interval"].Value
-            IniWrite(dodgeData, this.settingsFile, section, "dodge")
-
-            potionData := GUIManager.uCtrl["potion"]["key"].Value . "," . 
-                          GUIManager.uCtrl["potion"]["enable"].Value . "," . 
-                          GUIManager.uCtrl["potion"]["interval"].Value
-            IniWrite(potionData, this.settingsFile, section, "potion")
-
-            forceMoveData := GUIManager.uCtrl["forceMove"]["key"].Value . "," . 
-                             GUIManager.uCtrl["forceMove"]["enable"].Value . "," . 
-                             GUIManager.uCtrl["forceMove"]["interval"].Value
-            IniWrite(forceMoveData, this.settingsFile, section, "forceMove")
-
-            ipPauseData := GUIManager.uCtrl["ipPause"]["enable"].Value . "," . 
-                           GUIManager.uCtrl["ipPause"]["interval"].Value
-            IniWrite(ipPauseData, this.settingsFile, section, "ipPause")
-
-            tabPauseData := GUIManager.uCtrl["tabPause"]["enable"].Value . "," . 
-                            GUIManager.uCtrl["tabPause"]["interval"].Value
-            IniWrite(tabPauseData, this.settingsFile, section, "tabPause")
-
-            dcPauseData := GUIManager.uCtrl["dcPause"]["enable"].Value . "," . 
-                           GUIManager.uCtrl["dcPause"]["interval"].Value
-            IniWrite(dcPauseData, this.settingsFile, section, "dcPause")
-
-            mouseAutoMoveData := GUIManager.uCtrl["mouseAutoMove"]["enable"].Value . "," . 
-                                 GUIManager.uCtrl["mouseAutoMove"]["interval"].Value
-            IniWrite(mouseAutoMoveData, this.settingsFile, section, "mouseAutoMove")
-            RandomData := GUIManager.uCtrl["random"]["enable"].Value . "," . 
-                          GUIManager.uCtrl["random"]["max"].Value
-            IniWrite(RandomData, this.settingsFile, section, "random")
-
-            IniWrite(GUIManager.RunMod.Value, this.settingsFile, section, "runMode")
-            IniWrite(GUIManager.uCtrl["shift"]["enable"].Value, this.settingsFile, section, "shift")
-            IniWrite(GUIManager.uCtrl["D4only"]["enable"].Value, this.settingsFile, section, "D4only")
-            IniWrite(GUIManager.uCtrl["xy"]["x"].Value, this.settingsFile, section, "xyX")
-            IniWrite(GUIManager.uCtrl["xy"]["y"].Value, this.settingsFile, section, "xyY")
-            IniWrite(GUIManager.startkey["mode"].Value, this.settingsFile, section, "hotkeyMode")
-            IniWrite(GUIManager.startkey["userkey"][1].key, this.settingsFile, section, "useHotKey")
-            
+            this._SaveCtrl(section, "left", GUIManager.mSkill["left"], ["enable", "interval", "mode"])
+            this._SaveCtrl(section, "right", GUIManager.mSkill["right"], ["enable", "interval", "mode"])
+            for name in ["dodge", "potion", "forceMove"] {
+                this._SaveCtrl(section, name, GUIManager.uCtrl[name], ["key", "enable", "interval"])
+            }
+            for name in ["ipPause", "tabPause", "dcPause", "mouseAutoMove"] {
+                this._SaveCtrl(section, name, GUIManager.uCtrl[name], ["enable", "interval"])
+            }
+            this._SaveCtrl(section, "random", GUIManager.uCtrl["random"], ["enable", "max"])
+            this.Write(section, "runMode", GUIManager.RunMod.Value)
+            this.Write(section, "shift", GUIManager.uCtrl["shift"]["enable"].Value)
+            this.Write(section, "D4only", GUIManager.uCtrl["D4only"]["enable"].Value)
+            this.Write(section, "xyX", GUIManager.uCtrl["xy"]["x"].Value)
+            this.Write(section, "xyY", GUIManager.uCtrl["xy"]["y"].Value)
+            this.Write(section, "hotkeyMode", GUIManager.startkey["mode"].Value)
+            this.Write(section, "useHotKey", GUIManager.startkey["userkey"][1].key)
             return true
-            
         } catch {
             return false
         }
     }
-    
     /**
-     * 加载
+     * 从INI反序列化配置到UI控件
      */
     static LoadProfile(profileName) {
         try {
             section := profileName
-
-            for Index in [1, 2, 3, 4, 5]  {
-                skillData := IniRead(this.settingsFile, section, "skill" Index, Index . ",1,20,1")
-                parts := StrSplit(skillData, ",")
-                
-                if (parts.Length >= 4) {
-                    GUIManager.cSkill[Index]["key"].Value := parts[1]
-                    GUIManager.cSkill[Index]["enable"].Value := Integer(parts[2])
-                    GUIManager.cSkill[Index]["interval"].Value := Integer(parts[3])
-                    GUIManager.cSkill[Index]["mode"].Value := Integer(parts[4])
-                }
+            fieldKeyEnableIntervalMode := [{name: "key", isInt: false}, {name: "enable", isInt: true}, {name: "interval", isInt: true}, {name: "mode", isInt: true}]
+            fieldEnableIntervalMode := [{name: "enable", isInt: true}, {name: "interval", isInt: true}, {name: "mode", isInt: true}]
+            fieldKeyEnableInterval := [{name: "key", isInt: false}, {name: "enable", isInt: true}, {name: "interval", isInt: true}]
+            fieldEnableInterval := [{name: "enable", isInt: true}, {name: "interval", isInt: true}]
+            fieldEnableMax := [{name: "enable", isInt: true}, {name: "max", isInt: true}]
+            for i in [1, 2, 3, 4, 5] {
+                this._LoadCtrl(section, "skill" i, GUIManager.cSkill[i], fieldKeyEnableIntervalMode, i . ",1,20,1")
             }
-
-            leftData := IniRead(this.settingsFile, section, "left", "0,80,1")
-            leftParts := StrSplit(leftData, ",")
-            if (leftParts.Length >= 3) {
-                GUIManager.mSkill["left"]["enable"].Value := Integer(leftParts[1])
-                GUIManager.mSkill["left"]["interval"].Value := Integer(leftParts[2])
-                GUIManager.mSkill["left"]["mode"].Value := Integer(leftParts[3])
-            }
-            
-            rightData := IniRead(this.settingsFile, section, "right", "1,300,1")
-            rightParts := StrSplit(rightData, ",")
-            if (rightParts.Length >= 3) {
-                GUIManager.mSkill["right"]["enable"].Value := Integer(rightParts[1])
-                GUIManager.mSkill["right"]["interval"].Value := Integer(rightParts[2])
-                GUIManager.mSkill["right"]["mode"].Value := Integer(rightParts[3])
-            }
-
-            dodgeData := IniRead(this.settingsFile, section, "dodge", "Space,0,20")
-            dodgeParts := StrSplit(dodgeData, ",")
-            if (dodgeParts.Length >= 3) {
-                GUIManager.uCtrl["dodge"]["key"].Value := dodgeParts[1]
-                GUIManager.uCtrl["dodge"]["enable"].Value := Integer(dodgeParts[2])
-                GUIManager.uCtrl["dodge"]["interval"].Value := Integer(dodgeParts[3])
-            }
-
-            potionData := IniRead(this.settingsFile, section, "potion", "q,0,3000")
-            potionParts := StrSplit(potionData, ",")
-            if (potionParts.Length >= 3) {
-                GUIManager.uCtrl["potion"]["key"].Value := potionParts[1]
-                GUIManager.uCtrl["potion"]["enable"].Value := Integer(potionParts[2])
-                GUIManager.uCtrl["potion"]["interval"].Value := Integer(potionParts[3])
-            }
-
-            forceMoveData := IniRead(this.settingsFile, section, "forceMove", "e,0,50")
-            forceMoveParts := StrSplit(forceMoveData, ",")
-            if (forceMoveParts.Length >= 3) {
-                GUIManager.uCtrl["forceMove"]["key"].Value := forceMoveParts[1]
-                GUIManager.uCtrl["forceMove"]["enable"].Value := Integer(forceMoveParts[2])
-                GUIManager.uCtrl["forceMove"]["interval"].Value := Integer(forceMoveParts[3])
-            }
-
-            ipPauseData := IniRead(this.settingsFile, section, "ipPause", "0,50")
-            ipPauseParts := StrSplit(ipPauseData, ",")
-            if (ipPauseParts.Length >= 2) {
-                GUIManager.uCtrl["ipPause"]["enable"].Value := Integer(ipPauseParts[1])
-                GUIManager.uCtrl["ipPause"]["interval"].Value := Integer(ipPauseParts[2])
-            }
-
-            tabPauseData := IniRead(this.settingsFile, section, "tabPause", "0,100")
-            tabPauseParts := StrSplit(tabPauseData, ",")
-            if (tabPauseParts.Length >= 2) {
-                GUIManager.uCtrl["tabPause"]["enable"].Value := Integer(tabPauseParts[1])
-                GUIManager.uCtrl["tabPause"]["interval"].Value := Integer(tabPauseParts[2])
-            }
-
-            dcPauseData := IniRead(this.settingsFile, section, "dcPause", "1,2")
-            dcPauseParts := StrSplit(dcPauseData, ",")
-            if (dcPauseParts.Length >= 2) {
-                GUIManager.uCtrl["dcPause"]["enable"].Value := Integer(dcPauseParts[1])
-                GUIManager.uCtrl["dcPause"]["interval"].Value := Integer(dcPauseParts[2])
-            }
-
-            mouseAutoMoveData := IniRead(this.settingsFile, section, "mouseAutoMove", "0,1000")
-            mouseAutoMoveParts := StrSplit(mouseAutoMoveData, ",")
-            if (mouseAutoMoveParts.Length >= 2) {
-                GUIManager.uCtrl["mouseAutoMove"]["enable"].Value := Integer(mouseAutoMoveParts[1])
-                GUIManager.uCtrl["mouseAutoMove"]["interval"].Value := Integer(mouseAutoMoveParts[2])
-            }
-
-            RandomData := IniRead(this.settingsFile, section, "random", "0,10")
-            RandomParts := StrSplit(RandomData, ",")
-            if (RandomParts.Length >= 2) {
-                GUIManager.uCtrl["random"]["enable"].Value := Integer(RandomParts[1])
-                GUIManager.uCtrl["random"]["max"].Value := Integer(RandomParts[2])
-            }
-  
-            GUIManager.RunMod.Value := IniRead(this.settingsFile, section, "runMode", "1")
-            GUIManager.uCtrl["shift"]["enable"].Value := IniRead(this.settingsFile, section, "shift", "0")
-            GUIManager.uCtrl["D4only"]["enable"].Value := IniRead(this.settingsFile, section, "D4only", "1")
-            GUIManager.uCtrl["xy"]["x"].Value := IniRead(this.settingsFile, section, "xyX", "0")
-            GUIManager.uCtrl["xy"]["y"].Value := IniRead(this.settingsFile, section, "xyY", "0")
-            GUIManager.startkey["mode"].Value := IniRead(this.settingsFile, section, "hotkeyMode", "1")
-            GUIManager.startkey["userkey"][1].key := IniRead(this.settingsFile, section, "useHotKey", "F1")
+            this._LoadCtrl(section, "left", GUIManager.mSkill["left"], fieldEnableIntervalMode, "0,80,1")
+            this._LoadCtrl(section, "right", GUIManager.mSkill["right"], fieldEnableIntervalMode, "1,300,1")
+            this._LoadCtrl(section, "dodge", GUIManager.uCtrl["dodge"], fieldKeyEnableInterval, "Space,0,20")
+            this._LoadCtrl(section, "potion", GUIManager.uCtrl["potion"], fieldKeyEnableInterval, "q,0,3000")
+            this._LoadCtrl(section, "forceMove", GUIManager.uCtrl["forceMove"], fieldKeyEnableInterval, "e,0,50")
+            this._LoadCtrl(section, "ipPause", GUIManager.uCtrl["ipPause"], fieldEnableInterval, "0,50")
+            this._LoadCtrl(section, "tabPause", GUIManager.uCtrl["tabPause"], fieldEnableInterval, "0,100")
+            this._LoadCtrl(section, "dcPause", GUIManager.uCtrl["dcPause"], fieldEnableInterval, "1,2")
+            this._LoadCtrl(section, "mouseAutoMove", GUIManager.uCtrl["mouseAutoMove"], fieldEnableInterval, "0,1000")
+            this._LoadCtrl(section, "random", GUIManager.uCtrl["random"], fieldEnableMax, "0,10")
+            GUIManager.RunMod.Value := this.Read(section, "runMode", "1")
+            GUIManager.uCtrl["shift"]["enable"].Value := this.Read(section, "shift", "0")
+            GUIManager.uCtrl["D4only"]["enable"].Value := this.Read(section, "D4only", "1")
+            GUIManager.uCtrl["xy"]["x"].Value := this.Read(section, "xyX", "0")
+            GUIManager.uCtrl["xy"]["y"].Value := this.Read(section, "xyY", "0")
+            GUIManager.startkey["mode"].Value := this.Read(section, "hotkeyMode", "1")
+            GUIManager.startkey["userkey"][1].key := this.Read(section, "useHotKey", "F1")
             GUIManager.startkey["guiHotkey"].Value := GUIManager.startkey["userkey"][1].key
             HotkeyManager.LoadStartHotkey()
-
             return true
-            
         } catch {
             return false
         }
     }
-    
     /**
-     * 配置列表管理
+     * 获取配置方案列表，确保默认方案存在
      */
     static GetProfileList() {
         profilesString := this.Read("Profiles", "List", this.defaultProfile)
         profileList := StrSplit(profilesString, "|")
-        
-        found := false
-        for profile in profileList {
-            if (profile = this.defaultProfile) {
-                found := true
-                break
-            }
-        
-        }
-
-        if (!found) {
+        if (profileList.Length == 0 || profileList[1] != this.defaultProfile) {
             profileList.InsertAt(1, this.defaultProfile)
             this.Write("Profiles", "List", UtilityHelper.Join(profileList, "|"))
         }
         return profileList
     }
-    
     static SaveProfileList(profileList) {
         return this.Write("Profiles", "List", UtilityHelper.Join(profileList, "|"))
     }
-    
     static GetLastUsedProfile() {
         return this.Read("Global", "LastUsedProfile", this.defaultProfile)
     }
-    
     static SetLastUsedProfile(profileName) {
         return this.Write("Global", "LastUsedProfile", profileName)
     }
-    
+    /**
+     * 删除指定配置方案（默认方案受保护）
+     */
     static DeleteProfile(profileName) {
-        if (profileName = this.defaultProfile)
+        if (profileName = this.defaultProfile) {
             return false
-            
+        }
         try {
             profileList := this.GetProfileList()
             for i, name in profileList {
@@ -2121,7 +2008,6 @@ class ConfigManager {
                     break
                 }
             }
-
             this.SaveProfileList(profileList)
             this.DeleteSection(profileName)
             return true
@@ -2129,45 +2015,41 @@ class ConfigManager {
             return false
         }
     }
-    
     static ProfileExists(profileName) {
         profileList := this.GetProfileList()
         for profile in profileList {
-            if (profile = profileName)
+            if (profile = profileName) {
                 return true
+            }
         }
         return false
     }
-    
     /**
-     * 确保配置文件存在
+     * 确保配置文件存在，不存在则创建默认内容
      */
     static EnsureConfigFile() {
-        if (!FileExist(this.settingsFile)) {
-            try {
-                defaultContent := "[Profiles]`nList=" . this.defaultProfile . "`n`n[Global]`nLastUsedProfile=" . this.defaultProfile . "`n`n"
-                FileAppend(defaultContent, this.settingsFile)
-                return true
-            } catch {
-                return false
-            }
+        if (FileExist(this.settingsFile)) {
+            return true
         }
-        return true
+        try {
+            defaultContent := "[Profiles]`nList=" . this.defaultProfile . "`n`n[Global]`nLastUsedProfile=" . this.defaultProfile . "`n`n"
+            FileAppend(defaultContent, this.settingsFile)
+            return true
+        } catch {
+            return false
+        }
     }
-    
     /**
-     * 更新
+     * 更新下拉框选项列表并恢复选中状态
      */
     static UpdateDropDown(ctrl, selectProfile := "") {
         try {
             profileList := this.GetProfileList()
-            currentText := selectProfile != "" ? selectProfile : ctrl.Text
-            
+            currentText := (selectProfile != "") ? selectProfile : ctrl.Text
             ctrl.Delete()
             for i, name in profileList {
                 ctrl.Add([name])
             }
-
             if (currentText != "") {
                 ctrl.Text := currentText
                 for i, name in profileList {
@@ -2177,53 +2059,39 @@ class ConfigManager {
                     }
                 }
             }
-            
             if (ctrl.Text = "" && profileList.Length > 0) {
                 ctrl.Text := profileList[1]
                 ctrl.Value := 1
             }
-            
             return true
         } catch {
             return false
         }
     }
-    
     /**
-     * 保存
+     * 从UI保存当前配置方案
      */
     static SaveProfileFromUI() {
         profileNameInput := Trim(GUIManager.profileName.Text)
-        if (this.SaveProfile(profileNameInput)) {
-            if (!this.ProfileExists(profileNameInput)) {
-                profileList := this.GetProfileList()
-                profileList.Push(profileNameInput)
-                this.SaveProfileList(profileList)
-            }
-
-            this.UpdateDropDown(GUIManager.profileName, profileNameInput)
-            this.SetLastUsedProfile(profileNameInput)
-            
-            GUIManager.statusBar.Text := "配置方案「" profileNameInput "」已保存"
-        } else {
+        if (!this.SaveProfile(profileNameInput)) {
             GUIManager.statusBar.Text := "保存配置失败"
-        }
-    }
-    
-    /**
-     * 加载
-     */
-    static LoadSelectedProfile(ctrl, *) {
-        
-        if (Type(ctrl) = "String") {
-            selectedProfile := ctrl
-        } else {
-            selectedProfile := Trim(ctrl.Text)
-        }
-        if (selectedProfile = "") {
             return
         }
-        if (!this.ProfileExists(selectedProfile)) {
+        if (!this.ProfileExists(profileNameInput)) {
+            profileList := this.GetProfileList()
+            profileList.Push(profileNameInput)
+            this.SaveProfileList(profileList)
+        }
+        this.UpdateDropDown(GUIManager.profileName, profileNameInput)
+        this.SetLastUsedProfile(profileNameInput)
+        GUIManager.statusBar.Text := "配置方案「" profileNameInput "」已保存"
+    }
+    /**
+     * 加载选中的配置方案（兼容字符串和控件两种入参）
+     */
+    static LoadSelectedProfile(ctrl, *) {
+        selectedProfile := (Type(ctrl) = "String") ? ctrl : Trim(ctrl.Text)
+        if (selectedProfile = "" || !this.ProfileExists(selectedProfile)) {
             return
         }
         if (this.LoadProfile(selectedProfile)) {
@@ -2233,9 +2101,8 @@ class ConfigManager {
             GUIManager.statusBar.Text := "加载配置失败"
         }
     }
-    
     /**
-     * 删除
+     * 从UI删除配置方案（默认方案则重置内容）
      */
     static DeleteProfileFromUI() {
         profileList := this.GetProfileList()
@@ -2243,10 +2110,9 @@ class ConfigManager {
         if (currentProfileName = this.defaultProfile) {
             this.DeleteSection(this.defaultProfile)
             this.LoadSelectedProfile(this.defaultProfile)
-            GUIManager.statusBar.Text := "默认配置以重置"
+            GUIManager.statusBar.Text := "默认配置已重置"
             return
         }
-
         if (this.DeleteProfile(currentProfileName)) {
             this.UpdateDropDown(GUIManager.profileName, this.defaultProfile)
             this.LoadSelectedProfile(this.defaultProfile)
@@ -2255,19 +2121,16 @@ class ConfigManager {
             GUIManager.statusBar.Text := "删除配置失败"
         }
     }
-    
     /**
-     * 初始化
+     * 初始化配置管理器：创建文件、加载上次方案
      */
     static Initialize() {
         if (!this.EnsureConfigFile()) {
             GUIManager.statusBar.Text := "配置文件初始化失败"
             return
         }
-
         lastProfile := this.GetLastUsedProfile()
         this.UpdateDropDown(GUIManager.profileName, lastProfile)
-
         this.LoadSelectedProfile(lastProfile)
         GUIManager.statusBar.Text := "配置已加载: " lastProfile
     }
