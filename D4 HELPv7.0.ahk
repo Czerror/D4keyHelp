@@ -352,10 +352,10 @@ class HotkeyManager {
             if (currentHotkey != "" && currentHotkey != newHotkey) {
                 try {
                     Hotkey(currentHotkey, "Off")
-                } catch {
+                } catch as err {
+                    UtilityHelper.DebugLog("关闭旧热键失败: " . currentHotkey . " - " . err.Message)
                 }
             }
-            
             if (newHotkey != currentHotkey) {
                 Hotkey(newHotkey, (*) => MacroController.ToggleMacro(), "On")
                 currentHotkey := newHotkey
@@ -364,7 +364,8 @@ class HotkeyManager {
                 }
                 this.UpdateHotkeyText()
             }
-        } catch {
+        } catch as err {
+            UtilityHelper.DebugLog("加载启动热键失败: " . err.Message)
         }
     }
     
@@ -741,15 +742,16 @@ class KeyHandler {
             case 3: ; 按住模式
                 if (!this.holdStates.Has(uniqueKey) || !this.holdStates[uniqueKey]) {
                     this.holdStates[uniqueKey] := true
-                    
                     if (this.IsMouse(keyData)) {
-                        if (shiftEnabled)
+                        if (shiftEnabled) {
                             Send "{Blind}{Shift down}"
-                            Click("down " keyData.key)
+                        }
+                        Click("down " keyData.key)
                     } else {
-                        if (shiftEnabled)
+                        if (shiftEnabled) {
                             Send "{Blind}{Shift down}"
-                            Send("{" keyData.key " down}")
+                        }
+                        Send("{" keyData.key " down}")
                     }
                 }
 
@@ -808,7 +810,8 @@ class KeyHandler {
         if (this.skillTimers.Has(keyData.uniqueKey)) {
             try {
                 SetTimer(this.skillTimers[keyData.uniqueKey], 0)
-            } catch {
+            } catch as err {
+                UtilityHelper.DebugLog("停止技能定时器失败: " . keyData.uniqueKey . " - " . err.Message)
             }
             this.skillTimers.Delete(keyData.uniqueKey)
         }
@@ -984,7 +987,8 @@ class KeyHandler {
         for timerKey, timerFunc in this.skillTimers {
             try {
                 SetTimer(timerFunc, 0)
-            } catch {
+            } catch as err {
+                UtilityHelper.DebugLog("清理定时器失败: " . timerKey . " - " . err.Message)
             }
         }
         this.skillTimers.Clear()
@@ -1382,7 +1386,7 @@ class PauseDetector {
      */
     static ManageTimers(enable) {
         if (enable) {
-            this.GetTimerConfig()
+            this.UpdateTimerConfig()
             for timerName, timerConfig in this.CheckTimer {
                 if (timerConfig.enabled) {
                     SetTimer(timerConfig.func, timerConfig.interval)
@@ -1391,14 +1395,12 @@ class PauseDetector {
                 }
             }
         } else {
-            if (this.CheckTimer.Count == 0) {
-                this.GetTimerConfig()
-            }
-            
+            this.InitializeTimerConfig()
             for timerName, timerConfig in this.CheckTimer {
                 try {
                     SetTimer(timerConfig.func, 0)
-                } catch {
+                } catch as err {
+                    UtilityHelper.DebugLog("停止检测定时器失败: " . timerName . " - " . err.Message)
                 }
             }
             this.ResetCounters()
@@ -1406,44 +1408,52 @@ class PauseDetector {
     }
 
     /**
-     * 获取定时器配置
-     * 包括箭头函数、启用状态和检测间隔
+     * 初始化定时器配置（仅首次调用时创建闭包）
      */
-    static GetTimerConfig() {
+    static InitializeTimerConfig() {
+        if (this.CheckTimer.Count > 0) {
+            return
+        }
+        this.CheckTimer["CheckWindow"] := {
+            func: ObjBindMethod(this, "CheckWindow"),
+            enabled: true,
+            interval: 100
+        }
+        this.CheckTimer["AutoPauseByBlood"] := {
+            func: ObjBindMethod(this, "AutoPauseByBlood"),
+            enabled: false,
+            interval: 50
+        }
+        this.CheckTimer["AutoPauseByTAB"] := {
+            func: ObjBindMethod(this, "AutoPauseByTAB"),
+            enabled: false,
+            interval: 100
+        }
+    }
 
+    /**
+     * 更新定时器配置的启用状态和检测间隔
+     * 闭包复用，仅更新动态参数
+     */
+    static UpdateTimerConfig() {
+        this.InitializeTimerConfig()
         d4Only := GUIManager.uCtrl["D4only"]["enable"].Value
         blood := GUIManager.uCtrl["ipPause"]["enable"].Value
         tab := GUIManager.uCtrl["tabPause"]["enable"].Value
-        
         bloodInterval := (
             GUIManager.uCtrl.Has("ipPause") && GUIManager.uCtrl["ipPause"].Has("interval")
                 ? Integer(GUIManager.uCtrl["ipPause"]["interval"].Value)
                 : 50
         )
-        
         tabInterval := (
             GUIManager.uCtrl.Has("tabPause") && GUIManager.uCtrl["tabPause"].Has("interval")
                 ? Integer(GUIManager.uCtrl["tabPause"]["interval"].Value)
                 : 100
         )
-
-        this.CheckTimer["CheckWindow"] := {
-            func: () => this.CheckWindow(),
-            enabled: true,
-            interval: 100
-        }
-        
-        this.CheckTimer["AutoPauseByBlood"] := {
-            func: () => this.AutoPauseByBlood(),
-            enabled: d4Only && blood,  ; 血条检测依赖d4only模式
-            interval: bloodInterval
-        }
-        
-        this.CheckTimer["AutoPauseByTAB"] := {
-            func: () => this.AutoPauseByTAB(),
-            enabled: d4Only && tab,    ; TAB检测依赖d4only模式
-            interval: tabInterval
-        }
+        this.CheckTimer["AutoPauseByBlood"].enabled := d4Only && blood
+        this.CheckTimer["AutoPauseByBlood"].interval := bloodInterval
+        this.CheckTimer["AutoPauseByTAB"].enabled := d4Only && tab
+        this.CheckTimer["AutoPauseByTAB"].interval := tabInterval
     }
 
     /**
@@ -1762,7 +1772,7 @@ class ColorDetector {
         
         currentTime := A_TickCount
         timeSlot := currentTime // this.cacheLifetime
-        cacheKey := (x << 20) | (y << 8) | (timeSlot & 0xFF)
+        cacheKey := x . "," . y . "," . (timeSlot & 0xFF)
         
         if (currentTime - this.lastCacheClear > 150) {
             if (this.pixelCache.Count > this.maxCacheEntries) {
@@ -2276,7 +2286,7 @@ class ConfigManager {
 
     if (currentTime - lastClickTime < 400) {
         MacroController.TogglePause("doubleClick", true)
-        confirmTime := GUIManager.uCtrl["dcPause"]["interval"] ? GUIManager.uCtrl["dcPause"]["interval"].Value : 2
+        confirmTime := Integer(GUIManager.uCtrl["dcPause"]["interval"].Value) || 2
         SetTimer(ObjBindMethod(MacroController, "TogglePause", "doubleClick", false), -confirmTime * 1000)
         lastClickTime := 0
     } else {
