@@ -1543,14 +1543,16 @@ class PauseDetector {
     }
 
     /**
-     * 检测Boss血条
+     * 检测血条（通用实现）
+     * 对指定坐标进行8次随机偏移采样，命中≥4次即判定为检测到血条
+     * @param {String} baseCoordName - allcoords中的坐标键名
      * @param {Map} allcoords - 坐标映射
      * @param {Map} pixelCache - 像素缓存（可选）
-     * @returns {Boolean} - 是否检测到Boss血条
+     * @returns {Boolean} - 是否检测到血条
      */
-    static CheckBoss(allcoords, pixelCache := unset) {
+    static _CheckBloodBar(baseCoordName, allcoords, pixelCache := unset) {
         try {
-            baseCoord := allcoords["boss_blood"]
+            baseCoord := allcoords[baseCoordName]
             hitCount := 0
 
             loop 8 {
@@ -1562,7 +1564,7 @@ class PauseDetector {
 
                 key := sampleX . "," . sampleY
 
-                color := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
+                color := (IsSet(pixelCache) && pixelCache.Has(key)) ?
                     pixelCache[key] : ColorDetector.GetPixelRGB(sampleX, sampleY)
 
                 if (IsSet(pixelCache)) {
@@ -1582,44 +1584,14 @@ class PauseDetector {
         }
     }
 
-    /**
-     * 检测怪物血条
-     * @param {Map} allcoords - 坐标映射
-     * @param {Map} pixelCache - 像素缓存（可选）
-     * @returns {Boolean} - 是否检测到怪物血条
-     */
+    /** 检测Boss血条 — 委托给 _CheckBloodBar */
+    static CheckBoss(allcoords, pixelCache := unset) {
+        return this._CheckBloodBar("boss_blood", allcoords, pixelCache)
+    }
+
+    /** 检测怪物血条 — 委托给 _CheckBloodBar */
     static CheckMonster(allcoords, pixelCache := unset) {
-        try {
-            baseCoord := allcoords["monster_blood"]
-            hitCount := 0
-
-            loop 8 {
-                offsetX := Random(-2, 2)
-                offsetY := Random(-2, 2)
-
-                sampleX := baseCoord.x + offsetX
-                sampleY := baseCoord.y + offsetY
-
-                key := sampleX . "," . sampleY
-
-                color := (IsSet(pixelCache) && pixelCache.Has(key)) ? 
-                    pixelCache[key] : ColorDetector.GetPixelRGB(sampleX, sampleY)
-
-                if (IsSet(pixelCache)) {
-                    pixelCache[key] := color
-                }
-
-                if (ColorDetector.IsRed(color)) {
-                    hitCount++
-                    if (hitCount >= 4) {
-                        return true
-                    }
-                }
-            }
-            return false
-        } catch as err {
-            return false
-        }
+        return this._CheckBloodBar("monster_blood", allcoords, pixelCache)
     }
 
     /**
@@ -1877,21 +1849,13 @@ class ConfigManager {
             return false
         }
     }
-    /** 将值数组连接为CSV字符串 */
-    static _Join(values) {
-        result := ""
-        for i, v in values {
-            result .= (i > 1 ? "," : "") . v
-        }
-        return result
-    }
     /** 从控件Map提取字段值并序列化写入INI */
     static _SaveCtrl(section, key, ctrlMap, fields) {
         values := []
         for field in fields {
             values.Push(ctrlMap[field].Value)
         }
-        this.Write(section, key, this._Join(values))
+        this.Write(section, key, UtilityHelper.Join(values, ","))
     }
     /** 从INI读取CSV并按字段定义回填控件Map */
     static _LoadCtrl(section, key, ctrlMap, fieldDefs, defaultCSV) {
