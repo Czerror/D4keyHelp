@@ -903,7 +903,7 @@ class KeyHandler {
 
             loop 2 {
                 try {
-                    color := ColorDetector.GetPixelRGB(coord.x, coord.y, false)
+                    color := ColorDetector.GetPixelRGB(coord.x, coord.y)
                     if (ColorDetector.IsGreen(color))
                         return true
                 } catch {
@@ -970,7 +970,7 @@ class KeyHandler {
 
         loop 5 {
             try {
-                color := ColorDetector.GetPixelRGB(coord.x, coord.y + (A_Index - 1), false)
+                color := ColorDetector.GetPixelRGB(coord.x, coord.y + (A_Index - 1))
                 if (!ColorDetector.IsGray(color))  ; 如果不是灰色，认为资源充足
                     return true
             } catch {
@@ -1584,37 +1584,26 @@ class PauseDetector {
         }
     }
 
-    /** 检测Boss血条 — 委托给 _CheckBloodBar */
-    static CheckBoss(allcoords, pixelCache := unset) {
-        return this._CheckBloodBar("boss_blood", allcoords, pixelCache)
-    }
-
-    /** 检测怪物血条 — 委托给 _CheckBloodBar */
-    static CheckMonster(allcoords, pixelCache := unset) {
-        return this._CheckBloodBar("monster_blood", allcoords, pixelCache)
-    }
-
     /**
      * 血条检测暂停逻辑
-     * 定时检测血条并自动暂停/启动宏
+     * 采用迟滞（hysteresis）计数机制：连续N帧满足条件才触发状态切换，
+     * 避免像素级单帧误检导致的频繁启停抖动。
+     * 直接调用 _CheckBloodBar，优先检测怪物血条（高频场景），
+     * 未命中时短路检测Boss血条。
+     * @returns {void}
      */
     static AutoPauseByBlood() {
         allcoords := WindowManager.GetAllCoord()
         bloodDetected := false
-        
         try {
             pixelCache := Map()
-            if (this.CheckMonster(allcoords, pixelCache)) {
-                bloodDetected := true
-            }
-            else if (this.CheckBoss(allcoords, pixelCache)) {
-                bloodDetected := true
-            }
-        } catch as err {
-            bloodDetected := false
+            bloodDetected := this._CheckBloodBar("monster_blood", allcoords, pixelCache)
+                          || this._CheckBloodBar("boss_blood", allcoords, pixelCache)
+        } catch {
+            ; 像素检测异常时保持 bloodDetected = false
         }
-
-        if (MacroController.pauseConfig["blood"].state) {
+        isPaused := MacroController.pauseConfig["blood"].state
+        if (isPaused) {
             if (bloodDetected) {
                 this.bloodResumeHitCount++
                 this.bloodPauseMissCount := 0
@@ -1625,17 +1614,17 @@ class PauseDetector {
             } else {
                 this.bloodResumeHitCount := 0
             }
-        } else {
-            if (!bloodDetected) {
-                this.bloodPauseMissCount++
-                this.bloodResumeHitCount := 0
-                if (this.bloodPauseMissCount >= this.PAUSE_THRESHOLD) {
-                    MacroController.TogglePause("blood", true)
-                    this.bloodPauseMissCount := 0
-                }
-            } else {
+            return
+        }
+        if (!bloodDetected) {
+            this.bloodPauseMissCount++
+            this.bloodResumeHitCount := 0
+            if (this.bloodPauseMissCount >= this.PAUSE_THRESHOLD) {
+                MacroController.TogglePause("blood", true)
                 this.bloodPauseMissCount := 0
             }
+        } else {
+            this.bloodPauseMissCount := 0
         }
     }
 
@@ -1709,70 +1698,21 @@ class PauseDetector {
  * @author Archenemy
  */
 class ColorDetector {
-    ; 静态缓存配置
-    static pixelCache := Map()
-    static cacheLifetime := 50
-    static lastCacheClear := 0
-    static maxCacheEntries := 100
-    
     /**
      * 获取指定坐标像素的RGB颜色值
+     * 像素缓存由调用方（PauseDetector）的 pixelCache Map 统一管理，
+     * 本方法仅执行单次屏幕像素读取，不做内部缓存。
      * @param {Integer} x - X坐标
      * @param {Integer} y - Y坐标
-     * @param {Boolean} useCache - 是否使用缓存，默认为true
      * @returns {Object} - 包含r, g, b三个颜色分量的对象
      */
-    static GetPixelRGB(x, y, useCache := true) {
-        if (!useCache) {
-            try {
-                color := PixelGetColor(x, y, "RGB")
-                return {
-                    r: (color >> 16) & 0xFF,
-                    g: (color >> 8) & 0xFF,
-                    b: color & 0xFF
-                }
-            } catch {
-                return {r: 0, g: 0, b: 0}
-            }
+    static GetPixelRGB(x, y) {
+        color := PixelGetColor(x, y, "RGB")
+        return {
+            r: (color >> 16) & 0xFF,
+            g: (color >> 8) & 0xFF,
+            b: color & 0xFF
         }
-        
-        currentTime := A_TickCount
-        timeSlot := currentTime // this.cacheLifetime
-        cacheKey := x . "," . y . "," . (timeSlot & 0xFF)
-        
-        if (currentTime - this.lastCacheClear > 150) {
-            if (this.pixelCache.Count > this.maxCacheEntries) {
-                this.pixelCache.Clear()
-            }
-            this.lastCacheClear := currentTime
-        }
-        
-        if (this.pixelCache.Has(cacheKey)) {
-            return this.pixelCache[cacheKey]
-        }
-        
-        try {
-            color := PixelGetColor(x, y, "RGB")
-            result := {
-                r: (color >> 16) & 0xFF,
-                g: (color >> 8) & 0xFF,
-                b: color & 0xFF
-            }
-            this.pixelCache[cacheKey] := result
-            return result
-        } catch {
-            result := {r: 0, g: 0, b: 0}
-            this.pixelCache[cacheKey] := result
-            return result
-        }
-    }
-    
-    /**
-     * 清理像素缓存
-     */
-    static ClearCache() {
-        this.pixelCache.Clear()
-        this.lastCacheClear := A_TickCount
     }
     
     ; 蓝色检测
