@@ -357,8 +357,8 @@ class HotkeyManager {
                 }
             }
             if (newHotkey != currentHotkey) {
-                Hotkey(newHotkey, (*) => MacroController.ToggleMacro(), "On")
-                currentHotkey := newHotkey
+                Hotkey("*" newHotkey, (*) => MacroController.ToggleMacro(), "On")
+                currentHotkey := "*" newHotkey
                 if (GUIManager.statusBar != "") {
                     GUIManager.statusBar.Text := "热键已更新: " newHotkey
                 }
