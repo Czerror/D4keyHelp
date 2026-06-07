@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 #SingleInstance Force
 ProcessSetPriority "High"
 
@@ -130,8 +130,7 @@ class GUIManager {
     static CreateRunningControls() {
         this.statusText := this.myGui.AddText("x30 y35 w80 h20", "状态: 未运行")
         this.myGui.AddButton("x30 y63 w85 h30", "开始/停止").OnEvent("Click", (*) => (
-            MacroController.ToggleMacro(),
-            MacroController.TogglePause("window", true)
+            MacroController.ToggleMacro()
         ))
         this.myGui.AddText("x180 y103 w30 h20", "模式: ")
         this.RunMod := this.myGui.AddDropDownList("x215 y100 w65 h60 Choose1", ["多线程", "单线程"])
@@ -530,17 +529,13 @@ class UtilityHelper {
                 logFile := debugLogFile
                 maxSize := 1024 * 1024
 
-                if FileExist(logFile) {
-                    fileObj := FileOpen(logFile, "r")
-                    if (fileObj.Length > maxSize) {
-                        fileObj.Close()
-                        FileDelete logFile
-                    } else {
-                        fileObj.Close()
-                    }
+                fileObj := FileOpen(logFile, "a")
+                if (fileObj.Length > maxSize) {
+                    fileObj.Length := 0
                 }
                 timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
-                FileAppend(timestamp . " - " . message . "`n", logFile)
+                fileObj.Write(timestamp . " - " . message . "`n")
+                fileObj.Close()
             } catch as err {
                 OutputDebug "日志写入失败: " err.Message
             }
@@ -733,12 +728,12 @@ class KeyHandler {
         shiftEnabled := GUIManager.uCtrl["shift"]["enable"].Value
 
         switch keyData.mode {
-            case 2: ; BUFF模式
-                if (this.IsSkillActive(keyData.id, keyData.coord)) {
+            case 2: ; BUFF模式（队列模式复用预检结果，多线程模式回退到实时检测）
+                isActive := keyData.HasProp("stateUrgent") ? !keyData.stateUrgent : this.IsSkillActive(keyData.id, keyData.coord)
+                if (isActive) {
                     return
-                } else {
-                    this._ExecuteKey(keyData, shiftEnabled)
                 }
+                this._ExecuteKey(keyData, shiftEnabled)
             case 3: ; 按住模式
                 if (!this.holdStates.Has(uniqueKey) || !this.holdStates[uniqueKey]) {
                     this.holdStates[uniqueKey] := true
@@ -817,9 +812,12 @@ class KeyHandler {
         }
 
         if (GUIManager.RunMod.Value == 1) {
+            randomOffset := GUIManager.uCtrl["random"]["enable"].Value
+                ? Random(1, GUIManager.uCtrl["random"]["max"].Value)
+                : 0
             timerFunc := () => this.HandleKeyMode(keyData)
             this.skillTimers[keyData.uniqueKey] := timerFunc
-            SetTimer(timerFunc, keyData.interval)
+            SetTimer(timerFunc, keyData.interval + randomOffset)
         } else if (GUIManager.RunMod.Value == 2) {
             KeyQueueManager.EnqueueKey(keyData)
         }
@@ -880,11 +878,6 @@ class KeyHandler {
             ? 1 
             : keyData.mode
 
-        ; 随机间隔调整
-        keyData.interval += GUIManager.uCtrl["random"]["enable"].Value 
-            ? Random(1, GUIManager.uCtrl["random"]["max"].Value) 
-            : 0
-
         return keyData
     }
 
@@ -896,23 +889,30 @@ class KeyHandler {
      */
     static IsSkillActive(skillId, coord := unset) {
         try {
-            ; 如果没有传入坐标，则计算坐标
             if (!IsSet(coord) || !coord) {
                 coord := this.GetSkillCoords(skillId)
             }
+            if (!coord)
+                return true
 
+            hasValidRead := false
             loop 2 {
                 try {
                     color := ColorDetector.GetPixelRGB(coord.x, coord.y)
+                    hasValidRead := true
                     if (ColorDetector.IsGreen(color))
                         return true
-                } catch {
+                } catch as err {
+                    UtilityHelper.DebugLog("IsSkillActive 像素检测失败: " . err.Message)
                     Sleep 5
                 }
             }
+            if (!hasValidRead)
+                return true
             return false
-        } catch {
-            return false
+        } catch as err {
+            UtilityHelper.DebugLog("IsSkillActive 异常: " . err.Message)
+            return true
         }
     }
 
@@ -1081,6 +1081,8 @@ class KeyQueueManager {
             mode: keyData.mode,
             interval: keyData.interval,
             originalInterval: keyData.interval,
+            randomEnabled: GUIManager.uCtrl["random"]["enable"].Value,
+            randomMax: GUIManager.uCtrl["random"]["max"].Value,
             id: keyData.id,
             uniqueKey: uniqueKey,
             coord: keyData.coord,
@@ -1096,12 +1098,16 @@ class KeyQueueManager {
      * 优先级计算函数
      * @param {Integer} mode - 按键模式
      * @param {String} id - 按键标识符
-     * @returns {Integer} 优先级数值
+     * @param {Object} coord - 技能坐标（mode 2 需要，用于检测 BUFF 状态）
+     * @returns {Integer} 优先级数值（mode 2 不活跃时返回 BOOST 值 10）
      */
-    static GetPriority(mode, id := "") {
+    static GetPriority(mode, id := "", coord := false) {
         switch mode {
             case 4: return 4
-            case 2: return 3
+            case 2:
+                if (coord && !KeyHandler.IsSkillActive(id, coord))
+                    return 10
+                return 3
             case 3: return 2
             case 1:
                 if (id = "dodge" || id = "potion" || id = "forceMove") {
@@ -1131,6 +1137,13 @@ class KeyQueueManager {
         if (dueEntries.Length == 0) {
             return
         }
+        for entry in dueEntries {
+            if (entry.config.mode == 2) {
+                isActive := KeyHandler.IsSkillActive(entry.config.id, entry.config.coord)
+                entry.config.stateUrgent := !isActive
+                entry.config.priority := this.GetPriority(entry.config.mode, entry.config.id, entry.config.coord)
+            }
+        }
         this.SortDueEntries(dueEntries)
         for entry in dueEntries {
             this.ExecuteKeyWithCorrection(entry.config, entry.overshoot, now)
@@ -1138,7 +1151,7 @@ class KeyQueueManager {
     }
     
     /**
-     * 排序到期按键
+     * 排序到期按键（priority > overshoot）
      * @param {Array} entries - 到期按键数组
      */
     static SortDueEntries(entries) {
@@ -1179,7 +1192,8 @@ class KeyQueueManager {
         }
         correctedInterval := Max(config.originalInterval - correction, 5)
         this.expectedNext[uniqueKey] := now + correctedInterval
-        config.interval := config.originalInterval
+        randomOffset := config.randomEnabled ? Random(1, config.randomMax) : 0
+        config.interval := config.originalInterval + randomOffset
     }
     
     /**
@@ -1231,22 +1245,20 @@ class WindowManager {
         )
 
         try {
-            if (this.IsD4WindowExists()) {
-                hWnd := WinGetID("ahk_class " . this.D4_WINDOW_CLASS)
-                rect := Buffer(16)
+            hWnd := WinGetID("ahk_class " . this.D4_WINDOW_CLASS)
+            rect := Buffer(16)
 
-                if (DllCall("GetClientRect", "Ptr", hWnd, "Ptr", rect)) {
+            if (DllCall("GetClientRect", "Ptr", hWnd, "Ptr", rect)) {
 
-                    windowInfo["D4W"] := NumGet(rect, 8, "Int") - NumGet(rect, 0, "Int")
-                    windowInfo["D4H"] := NumGet(rect, 12, "Int") - NumGet(rect, 4, "Int")
+                windowInfo["D4W"] := NumGet(rect, 8, "Int") - NumGet(rect, 0, "Int")
+                windowInfo["D4H"] := NumGet(rect, 12, "Int") - NumGet(rect, 4, "Int")
 
-                    windowInfo["CD4W"] := windowInfo["D4W"] / 2
-                    windowInfo["CD4H"] := windowInfo["D4H"] / 2
+                windowInfo["CD4W"] := windowInfo["D4W"] / 2
+                windowInfo["CD4H"] := windowInfo["D4H"] / 2
 
-                    windowInfo["D4SW"] := windowInfo["D4W"] / windowInfo["D44KW"]
-                    windowInfo["D4SH"] := windowInfo["D4H"] / windowInfo["D44KH"]
-                    windowInfo["D4S"] := Min(windowInfo["D4SW"], windowInfo["D4SH"])
-                }
+                windowInfo["D4SW"] := windowInfo["D4W"] / windowInfo["D44KW"]
+                windowInfo["D4SH"] := windowInfo["D4H"] / windowInfo["D44KH"]
+                windowInfo["D4S"] := Min(windowInfo["D4SW"], windowInfo["D4SH"])
             }
         } catch as err {
             UtilityHelper.DebugLog("获取窗口信息失败: " . err.Message)
@@ -1351,7 +1363,6 @@ class WindowManager {
         this.coordCache.Clear()
         this.windowInfo.Clear()
         this.lastWindowInfo := Map()
-        this.D4State := false
         KeyHandler.ClearCoordCache()
     }
 }
@@ -1472,7 +1483,7 @@ class PauseDetector {
         if (d4only) {
             pause := !WinActive("ahk_class Diablo IV Main Window Class")
         } else {
-            pause := WinActive("ahk_class AutoHotkeyGUI") || InStr(WinGetTitle("A"), "暗黑4助手")
+            pause := WinActive("ahk_id " GUIManager.myGui.Hwnd)
         }
         MacroController.TogglePause("window", pause)
     }
@@ -2045,6 +2056,7 @@ class ConfigManager {
 ~LButton::
 {
     static lastClickTime := 0
+    static doubleClickResumeTimer := ObjBindMethod(MacroController, "TogglePause", "doubleClick", false)
 
     if (!GUIManager.uCtrl["dcPause"]["enable"].Value)
         return
@@ -2054,7 +2066,7 @@ class ConfigManager {
     if (currentTime - lastClickTime < 400) {
         MacroController.TogglePause("doubleClick", true)
         confirmTime := Integer(GUIManager.uCtrl["dcPause"]["interval"].Value) || 2
-        SetTimer(ObjBindMethod(MacroController, "TogglePause", "doubleClick", false), -confirmTime * 1000)
+        SetTimer(doubleClickResumeTimer, -confirmTime * 1000)
         lastClickTime := 0
     } else {
         lastClickTime := currentTime
