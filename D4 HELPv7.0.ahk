@@ -590,47 +590,64 @@ class MacroController {
         if (!this.isRunning) {
             return
         }
-        
-        prevPausedReasons := []
-        if (this.isRunning) {
-            for pauseReason, config in this.pauseConfig {
-                if (config.state) {
-                    prevPausedReasons.Push(config.name)
-                }
-            }
+        if (this.pauseConfig[reason].state == state) {
+            return
         }
-        prev := (prevPausedReasons.Length > 0)
-        
+        wasAnyPaused := this._HasAnyPausedReason()
         this.pauseConfig[reason].state := state
-        
-        currentPausedReasons := []
-        if (this.isRunning) {
-            for pauseReason, config in this.pauseConfig {
-                if (config.state) {
-                    currentPausedReasons.Push(config.name)
-                }
-            }
-        }
-        now := (currentPausedReasons.Length > 0)
-        
-        if (now != prev) {
-            if (now) {
+        isAnyPaused := this._HasAnyPausedReason()
+        if (isAnyPaused != wasAnyPaused) {
+            if (isAnyPaused) {
                 this.StopAllTimers()
             } else {
                 this.StartAllTimers()
             }
         }
-        
-        if (now) {
-            reasonsText := UtilityHelper.Join(currentPausedReasons, " + ")
+        if (isAnyPaused) {
+            reasonsText := this._BuildPauseReasonText()
             GUIManager.UpdateStatus("已暂停", reasonsText)
         } else {
-            if (this.isRunning) {
-                GUIManager.UpdateStatus("运行中", "宏已启动")
-            } else {
-                GUIManager.UpdateStatus("已停止", "宏已停止")
+            GUIManager.UpdateStatus("运行中", "宏已启动")
+        }
+    }
+    
+    /**
+     * 检查是否有任何暂停原因处于活跃状态
+     * @returns {Boolean} - 存在至少一个暂停原因时返回 true
+     */
+    static _HasAnyPausedReason() {
+        for , config in this.pauseConfig {
+            if (config.state) {
+                return true
             }
         }
+        return false
+    }
+    
+    /**
+     * 构建暂停原因显示文本
+     * @returns {String} - 以 " + " 连接的暂停原因名称
+     */
+    static _BuildPauseReasonText() {
+        reasons := []
+        for , config in this.pauseConfig {
+            if (config.state) {
+                reasons.Push(config.name)
+            }
+        }
+        return UtilityHelper.Join(reasons, " + ")
+    }
+    
+    /**
+     * 查询暂停状态
+     * @param {String} reason - 可选，指定暂停原因；省略时查询整体暂停状态
+     * @returns {Boolean} - 指定原因或整体是否处于暂停状态
+     */
+    static IsPaused(reason := "") {
+        if (reason == "") {
+            return this._HasAnyPausedReason()
+        }
+        return this.pauseConfig.Has(reason) && this.pauseConfig[reason].state
     }
     
     /**
@@ -1613,7 +1630,7 @@ class PauseDetector {
         } catch {
             ; 像素检测异常时保持 bloodDetected = false
         }
-        isPaused := MacroController.pauseConfig["blood"].state
+        isPaused := MacroController.IsPaused("blood")
         if (isPaused) {
             if (bloodDetected) {
                 this.bloodResumeHitCount++
@@ -1650,7 +1667,7 @@ class PauseDetector {
             pixelCache := Map()
             keyPoints := this.CheckKeyPoints(allcoords, pixelCache)
 
-            if (MacroController.pauseConfig["tab"].state) {
+            if (MacroController.IsPaused("tab")) {
                 if (keyPoints.isBlueColor) {
                     this.tabResumeHitCount++
                     this.tabPauseMissCount := 0
@@ -1674,7 +1691,7 @@ class PauseDetector {
                 }
             }
 
-            if (MacroController.pauseConfig["enter"].state) {
+            if (MacroController.IsPaused("enter")) {
                 if (!this.CheckPauseByEnter(allcoords, pixelCache)) {
                     this.enterResumeHitCount++
                     this.enterPauseMissCount := 0
