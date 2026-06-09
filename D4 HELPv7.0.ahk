@@ -1308,14 +1308,12 @@ class WindowManager {
         userX := GUIManager.uCtrl["xy"]["x"].Value
         userY := GUIManager.uCtrl["xy"]["y"].Value
 
-        x := Round(windowInfo["CD4W"] + (coord.x - windowInfo["D44KWC"]) * windowInfo["D4S"])
-        y := Round(windowInfo["CD4H"] + (coord.y - windowInfo["D44KHC"]) * windowInfo["D4S"])
+        x := Round(windowInfo["CD4W"] + (coord.x - windowInfo["D44KWC"]) * windowInfo["D4SW"])
+        y := Round(windowInfo["CD4H"] + (coord.y - windowInfo["D44KHC"]) * windowInfo["D4SH"])
 
-        ; 如果缩放比例小于1，应用用户偏移
-        if (windowInfo["D4S"] < 1) {
-            x += userX
-            y += userY
-        }
+        ; 始终应用用户偏移（独立双轴缩放后无需条件判断）
+        x += userX
+        y += userY
 
         return {x: x, y: y}
     }
