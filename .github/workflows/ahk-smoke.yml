@@ -1,0 +1,39 @@
+name: AHK Smoke
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download official AutoHotkey v2.0.26
+        shell: pwsh
+        run: |
+          $ahkZip = "$env:RUNNER_TEMP\AutoHotkey_2.0.26.zip"
+          Invoke-WebRequest -Uri "https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.26/AutoHotkey_2.0.26.zip" -OutFile $ahkZip
+          Expand-Archive -Path $ahkZip -DestinationPath "$env:RUNNER_TEMP\ahk"
+
+      - name: Create smoke entry (real entry with Initialize replaced)
+        shell: pwsh
+        run: |
+          $entry = Get-Content -Raw -LiteralPath "$env:GITHUB_WORKSPACE\D4 HELPv7.1.ahk"
+          $smoke = $entry -replace 'GUIManager\.Initialize\(\)', 'ExitApp()'
+          Set-Content -LiteralPath "$env:GITHUB_WORKSPACE\smoke.ahk" -Value $smoke -Encoding UTF8
+
+      - name: Run AHK syntax smoke
+        shell: pwsh
+        run: |
+          $errLog = "$env:RUNNER_TEMP\ahk_err.txt"
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\ahk\v2\AutoHotkey64.exe" `
+            -ArgumentList '/ErrorStdOut', 'smoke.ahk' `
+            -WorkingDirectory "$env:GITHUB_WORKSPACE" `
+            -Wait -PassThru -WindowStyle Hidden `
+            -RedirectStandardError $errLog
+          Get-Content $errLog -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) {
+            exit $p.ExitCode
+          }

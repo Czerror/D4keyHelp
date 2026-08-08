@@ -1,16 +1,17 @@
-# D4 HELP v7.0
+# D4 HELP v7.1
 
-> 暗黑破坏神4 游戏辅助工具 · 基于 AutoHotkey v2.0 构建
+> 暗黑破坏神4 游戏辅助工具 · 基于 AutoHotkey v2.0.26 构建
 
-[![AutoHotkey](https://img.shields.io/badge/AutoHotkey-v2.0.19-3d8b37?logo=autohotkey)](https://www.autohotkey.com/)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Version](https://img.shields.io/badge/version-7.0-orange)](https://github.com/Czerror/D4keyHelp)
+[![AutoHotkey](https://img.shields.io/badge/AutoHotkey-v2.0.26-3d8b37?logo=autohotkey)](https://www.autohotkey.com/download/)
+[![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/Czerror/D4keyHelp)
+[![Version](https://img.shields.io/badge/version-7.1-orange)](https://github.com/Czerror/D4keyHelp)
 
 ---
 
 ## 目录
 
 - [项目简介](#项目简介)
+- [AutoHotkey 官方下载](#autohotkey-官方下载)
 - [架构概览](#架构概览)
 - [核心功能](#核心功能)
 - [系统要求](#系统要求)
@@ -26,25 +27,47 @@
 - [类架构文档](#类架构文档)
 - [常见问题](#常见问题)
 - [注意事项](#注意事项)
+- [版本历史](#版本历史)
 
 ---
 
 ## 项目简介
 
-**D4 HELP** 是专为《暗黑破坏神4》设计的游戏辅助工具，基于 AutoHotkey v2.0.19 开发，v7.0 采用**完全面向对象的类架构**重写。
+**D4 HELP** 是专为《暗黑破坏神4》设计的游戏辅助工具，基于 AutoHotkey v2.0.26 开发，v7.1 采用**完全面向对象的类架构**重写。
 
 核心目标：减少重复性机械操作，在合法合规范围内提升游戏体验。
 
-### v7.0 更新亮点
+### v7.1 特性
 
 | 特性 | 说明 |
 |------|------|
 | 🏗️ 类架构重写 | 10 个静态类模块化设计，职责清晰 |
-| ⚡ 像素缓存系统 | 颜色检测缓存，减少重复取色开销 |
 | 🔄 优先级队列 | 单线程模式按键优先级排序执行 |
+| 🎲 逐次随机延迟 | 每次按键触发都在间隔上叠加 1-10ms 随机，多线程/单线程均生效 |
 | 🛡️ 防抖动机制 | 阈值计数器避免检测抖动误触发 |
 | 📦 坐标缓存 | 窗口尺寸不变时复用坐标，避免重复计算 |
 | 🎯 精准暂停 | 窗口/血条/TAB/对话框/双击五种暂停源独立管理 |
+
+---
+
+## AutoHotkey 官方下载
+
+本工具基于 **AutoHotkey v2.0.26**（官方最新稳定版）开发，脚本首行
+`#Requires AutoHotkey v2.0.26` 会强制要求该版本或更高版本，低于此版本将无法运行。
+
+| 渠道 | 地址 |
+|------|------|
+| 官网下载页 | <https://www.autohotkey.com/download/> |
+| GitHub Releases（全部版本） | <https://github.com/AutoHotkey/AutoHotkey/releases> |
+| v2.0.26 安装包（推荐，含文件关联与启动器） | <https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.26/AutoHotkey_2.0.26_setup.exe> |
+| v2.0.26 便携版 ZIP | <https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.26/AutoHotkey_2.0.26.zip> |
+
+官方校验值（SHA256）：
+
+```
+2BF1B89B1047136490FC321D2FDC988B42DD86F693EEA7872746AC6ADF722BC3  AutoHotkey_2.0.26_setup.exe
+43522AA3122A57784AC5DB30ABF85C2244475C36ACD7796E2C993355F9E926AE  AutoHotkey_2.0.26.zip
+```
 
 ---
 
@@ -70,7 +93,7 @@ KeyHandler  KeyQueue  PauseDetector  WindowManager
   └─────────┬───────────┘              │
             ▼                          ▼
      ColorDetector              HotkeyManager
-     颜色检测·缓存                热键管理
+     颜色检测                    热键管理
             │
             ▼
      ConfigManager            UtilityHelper
@@ -82,12 +105,14 @@ KeyHandler  KeyQueue  PauseDetector  WindowManager
 ## 核心功能
 
 ### 技能自动化
+
 - 5 个技能位 + 左右键独立配置
 - 4 种运行策略：**连点 / BUFF检测 / 按住 / 资源检测**
 - 药水、强制移动、闪避独立控制
-- 随机延迟增强自然感
+- 逐次随机延迟增强自然感
 
 ### 智能暂停
+
 - 5 路独立暂停源，任意组合触发
 - 窗口切换自动暂停
 - 怪物/Boss 血条检测
@@ -95,10 +120,12 @@ KeyHandler  KeyQueue  PauseDetector  WindowManager
 - 双击左键临时暂停
 
 ### 双运行模式
+
 - **多线程模式**：技能独立定时器并行执行
 - **单线程模式**：优先级队列顺序执行，避免按键冲突
 
 ### 辅助能力
+
 - 鼠标自动循环移动（6 点防挂机）
 - Shift 键自动保持
 - 窗口置顶切换
@@ -111,7 +138,7 @@ KeyHandler  KeyQueue  PauseDetector  WindowManager
 | 项目 | 要求 |
 |------|------|
 | 操作系统 | Windows 10 / 11 |
-| AutoHotkey | v2.0.19 或更高 |
+| AutoHotkey | v2.0.26 或更高（[官方下载](#autohotkey-官方下载)） |
 | 游戏 | 暗黑破坏神4 |
 | 分辨率 | 基于 3840×2160 开发，支持自适应缩放 |
 
@@ -119,8 +146,8 @@ KeyHandler  KeyQueue  PauseDetector  WindowManager
 
 ## 快速开始
 
-1. 确保已安装 [AutoHotkey v2.0](https://www.autohotkey.com/)
-2. 下载 [`D4 HELPv7.0.ahk`](D4%20HELPv7.0.ahk)
+1. 安装 [AutoHotkey v2.0.26](https://www.autohotkey.com/download/) 或更高版本
+2. 下载 [`D4 HELPv7.1.ahk`](D4%20HELPv7.1.ahk)
 3. 双击运行脚本（系统托盘出现图标）
 4. 默认按 `F1` 启动/停止宏
 5. 在界面中按需调整技能、间隔和策略
@@ -174,6 +201,14 @@ KeyHandler  KeyQueue  PauseDetector  WindowManager
 | **按住** | 按下后保持不放 | 持续引导技能 |
 | **资源** | 检测资源条非灰色时释放 | 高耗能技能 |
 
+#### 随机延迟
+
+勾选“随机延迟”后，每次按键触发都会在基础间隔上叠加 `Random(1, 上限)` 毫秒
+（上限默认 10，可调 1-10）。**多线程模式每次触发重新计算，单线程模式同样生效**，
+不再是固定偏移。
+
+> 随机开关与上限在宏启动时快照，运行中修改界面需要重启宏才生效。
+
 ### 智能暂停系统
 
 5 路独立暂停源，任一触发即暂停所有计时器，全部恢复后继续：
@@ -188,6 +223,9 @@ TAB 界面 ──┼──→ MacroController.TogglePause() ──→ 暂停/恢
 
 - **防抖动**：连续 N 次检测到相同状态才触发切换（默认阈值 2）
 - **独立状态**：暂停原因可叠加，状态栏显示 `"血条检测 + TAB界面"`
+
+> 设计说明：对话框检测与 TAB 界面检测共用“界面检测”开关，关闭“界面检测”时两者都不运行；
+> 非 D4 模式下（如 POE），BUFF/资源策略自动降级为连点，鼠标自移、双击暂停不启用。
 
 ### 运行模式
 
@@ -211,7 +249,11 @@ TAB 界面 ──┼──→ MacroController.TogglePause() ──→ 暂停/恢
 
 #### 坐标自适应
 
-所有检测坐标基于 3840×2160 参考分辨率定义，`WindowManager.ConvertCoord()` 根据实际窗口尺寸等比缩放。支持用户 X/Y 微调偏移（±3 像素）。
+所有检测坐标基于 3840×2160 参考分辨率定义，`WindowManager.ConvertCoord()` 根据实际
+窗口尺寸等比缩放。支持用户 X/Y 微调偏移（±3 像素）。
+
+> 设计说明：颜色检测采用单点逐次取色（`PixelGetColor`），不引入像素缓存或整屏/区域
+> 批量截图（GDI+ BitBlt 等），以降低被游戏反作弊机制检测的风险。
 
 ### 配置管理
 
@@ -226,7 +268,7 @@ TAB 界面 ──┼──→ MacroController.TogglePause() ──→ 暂停/恢
 | 功能 | 说明 | 默认值 |
 |------|------|--------|
 | 按住 Shift | 所有按键操作自动附加 Shift | 关闭 |
-| 随机延迟 | 在技能间隔上叠加 1-10ms 随机 | 关闭 |
+| 随机延迟 | 每次触发在技能间隔上叠加 1-10ms 随机 | 关闭 |
 | 鼠标自移 | 6 个固定点位循环移动鼠标 | 关闭 |
 | 双击暂停 | 双击左键暂停 1-3 秒 | 开启 / 2秒 |
 | 窗口置顶 | 脚本窗口保持最前 | 关闭 |
@@ -235,20 +277,21 @@ TAB 界面 ──┼──→ MacroController.TogglePause() ──→ 暂停/恢
 
 ## 类架构文档
 
-v7.0 采用 10 个静态类组成的模块化架构：
+v7.1 采用 11 个静态类组成的模块化架构：
 
 | 类名 | 职责 | 关键方法 |
 |------|------|----------|
-| [`GUIManager`](D4%20HELPv7.0.ahk:14) | GUI 创建与状态管理 | `Initialize()`, `UpdateStatus()` |
-| [`HotkeyManager`](D4%20HELPv7.0.ahk:331) | 全局热键注册/更新 | `LoadStartHotkey()`, `UpdateHotkeyText()` |
-| [`MacroController`](D4%20HELPv7.0.ahk:556) | 宏生命周期与暂停协调 | `ToggleMacro()`, `TogglePause()` |
-| [`KeyHandler`](D4%20HELPv7.0.ahk:711) | 按键执行与模式分发 | `HandleKeyMode()`, `PressKeyCallback()` |
-| [`KeyQueueManager`](D4%20HELPv7.0.ahk:1035) | 单线程优先级队列 | `EnqueueKey()`, `ProcessCycle()` |
-| [`PauseDetector`](D4%20HELPv7.0.ahk:1367) | 暂停条件检测 | `AutoPauseByBlood()`, `AutoPauseByTAB()` |
-| [`WindowManager`](D4%20HELPv7.0.ahk:1196) | 窗口检测与坐标转换 | `GetWindowInfo()`, `ConvertCoord()` |
-| [`ColorDetector`](D4%20HELPv7.0.ahk:1735) | 像素取色与颜色判断 | `GetPixelRGB()`, `IsRed()`, `IsGreen()`… |
-| [`ConfigManager`](D4%20HELPv7.0.ahk:1841) | INI 配置读写与方案管理 | `SaveProfile()`, `LoadProfile()` |
-| [`UtilityHelper`](D4%20HELPv7.0.ahk:408) | 通用工具函数 | `DebugLog()`, `LimitEditValue()`, `MoveMouse()` |
+| [`GUIManager`](D4%20HELPv7.1.ahk:14) | GUI 创建与状态管理 | `Initialize()`, `UpdateStatus()` |
+| [`HotkeyManager`](D4%20HELPv7.1.ahk:357) | 全局热键注册/更新 | `LoadStartHotkey()`, `UpdateHotkeyText()` |
+| [`UtilityHelper`](D4%20HELPv7.1.ahk:452) | 通用工具函数 | `RandomDelay()`, `DebugLog()`, `LimitEditValue()` |
+| [`MacroController`](D4%20HELPv7.1.ahk:627) | 宏生命周期与暂停协调 | `ToggleMacro()`, `TogglePause()` |
+| [`KeyHandler`](D4%20HELPv7.1.ahk:815) | 按键执行与模式分发 | `HandleKeyMode()`, `PressKeyCallback()` |
+| [`KeyQueueManager`](D4%20HELPv7.1.ahk:1186) | 单线程优先级队列 | `EnqueueKey()`, `ProcessCycle()` |
+| [`WindowManager`](D4%20HELPv7.1.ahk:1393) | 窗口检测与坐标转换 | `GetWindowInfo()`, `ConvertCoord()` |
+| [`HysteresisTracker`](D4%20HELPv7.1.ahk:1558) | 迟滞阈值计数去抖 | `Update()`, `Reset()` |
+| [`PauseDetector`](D4%20HELPv7.1.ahk:1613) | 暂停条件检测 | `AutoPauseByBlood()`, `AutoPauseByTAB()` |
+| [`ColorDetector`](D4%20HELPv7.1.ahk:1876) | 像素取色与颜色判断 | `GetPixelRGB()`, `IsRed()`, `IsGreen()`… |
+| [`ConfigManager`](D4%20HELPv7.1.ahk:1959) | INI 配置读写与方案管理 | `SaveProfile()`, `LoadProfile()` |
 
 所有类均为纯静态方法，无实例化开销。
 
@@ -257,21 +300,25 @@ v7.0 采用 10 个静态类组成的模块化架构：
 ## 常见问题
 
 ### 程序无法启动
-1. 确认安装 AutoHotkey v2.0.19+
+
+1. 确认已安装 AutoHotkey v2.0.26+（[官方下载](#autohotkey-官方下载)）
 2. 检查杀毒软件是否拦截
 3. 尝试以管理员身份运行
 
 ### 技能不释放
+
 1. 检查游戏内键位绑定是否匹配
-2. 确认"启用"已勾选
-3. 确认"仅在暗黑4中使用"设置正确
+2. 确认“启用”已勾选
+3. 确认“仅在暗黑4中使用”设置正确
 
 ### 检测不准确
+
 1. 调整 X/Y 偏移值
 2. 检查游戏分辨率与界面缩放
 3. 增大检测间隔降低误触发
 
 ### CPU 占用高
+
 1. 调大检测间隔
 2. 关闭不必要的检测项
 3. 选用单线程模式
@@ -281,16 +328,20 @@ v7.0 采用 10 个静态类组成的模块化架构：
 ## 注意事项
 
 ### 使用规范
+
 - 本工具用于减少重复操作，不应用于完全自动化
 - 不建议在 PVP 或竞技模式中使用
 - 避免长时间连续运行
 
 ### 技术说明
+
 - 基于 3840×2160 分辨率开发，其他分辨率通过自适应缩放兼容
+- 颜色检测为逐点取色，不使用批量截图方案
 - 游戏更新可能影响检测准确性
 - 配置文件 `settings.ini` 与脚本同目录
 
 ### 免责声明
+
 - 本程序仅供学习研究用途
 - 使用者自行承担使用风险
 - 开发者不对账号安全负责
@@ -301,7 +352,8 @@ v7.0 采用 10 个静态类组成的模块化架构：
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| v7.0 | 2026-04 | 类架构重写，引入像素缓存、优先级队列、防抖动机制 |
+| v7.1 | 2026-08 | 按键处理优化批次：输入校验与启动保护、uniqueKey 冲突修复、队列检测合并与异常隔离、魔法数字收敛、schema 缓存、发送路径合并、CI 冒烟；并含随机延迟修复、移除像素缓存、升级 AutoHotkey v2.0.26、配置 UTF-16 |
+| v7.0 | 2026-04 | 类架构重写，引入优先级队列、防抖动机制（已归档 `old/`） |
 | v6.0 | 2025-08 | 重构灰色检测逻辑、窗口管理 |
 | v5.3 | — | 优化代码段可读性 |
 | v4.1 | — | 功能迭代 |
@@ -309,4 +361,4 @@ v7.0 采用 10 个静态类组成的模块化架构：
 
 ---
 
-*D4 HELP v7.0 · by Archenemy · [GitHub](https://github.com/Czerror/D4keyHelp)*
+*D4 HELP v7.1 · by Archenemy · [GitHub](https://github.com/Czerror/D4keyHelp)*
