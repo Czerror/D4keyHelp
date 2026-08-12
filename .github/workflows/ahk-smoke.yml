@@ -28,7 +28,7 @@ jobs:
         shell: pwsh
         run: |
           $errLog = "$env:RUNNER_TEMP\ahk_err.txt"
-          $p = Start-Process -FilePath "$env:RUNNER_TEMP\ahk\v2\AutoHotkey64.exe" `
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\ahk\AutoHotkey64.exe" `
             -ArgumentList '/ErrorStdOut', 'smoke.ahk' `
             -WorkingDirectory "$env:GITHUB_WORKSPACE" `
             -Wait -PassThru -WindowStyle Hidden `

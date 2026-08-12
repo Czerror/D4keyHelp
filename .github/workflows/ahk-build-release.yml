@@ -1,0 +1,94 @@
+name: Build & Release
+
+# 用户要求：master 分支有更新时自动打包发布。
+# 本仓库实际默认分支是 main，为兼容用户习惯双监听 main + master。
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download AutoHotkey v2.0.26 (official)
+        shell: pwsh
+        run: |
+          $ahkZip = "$env:RUNNER_TEMP\AutoHotkey_2.0.26.zip"
+          Invoke-WebRequest -Uri "https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.26/AutoHotkey_2.0.26.zip" -OutFile $ahkZip
+          Expand-Archive -Path $ahkZip -DestinationPath "$env:RUNNER_TEMP\ahk"
+          Get-Item "$env:RUNNER_TEMP\ahk\AutoHotkey64.exe" | Select-Object Name, Length
+
+      - name: Download Ahk2Exe (official compiler)
+        shell: pwsh
+        run: |
+          $a2e = "Ahk2Exe1.1.37.02a2"
+          $zip = "$env:RUNNER_TEMP\Ahk2Exe.zip"
+          Invoke-WebRequest -Uri "https://github.com/AutoHotkey/Ahk2Exe/releases/download/$a2e/$a2e.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\ahk2exe"
+          Get-Item "$env:RUNNER_TEMP\ahk2exe\Ahk2Exe.exe" | Select-Object Name, Length
+
+      - name: Syntax smoke (real script, entry replaced with ExitApp)
+        shell: pwsh
+        run: |
+          $entry = Get-Content -Raw -LiteralPath "$env:GITHUB_WORKSPACE\D4 HELPv7.1.ahk"
+          $smoke = $entry -replace 'GUIManager\.Initialize\(\)', 'ExitApp()'
+          Set-Content -LiteralPath "$env:GITHUB_WORKSPACE\smoke.ahk" -Value $smoke -Encoding utf8
+          $errLog = "$env:RUNNER_TEMP\smoke_err.txt"
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\ahk\AutoHotkey64.exe" `
+            -ArgumentList '/ErrorStdOut', 'smoke.ahk' `
+            -WorkingDirectory "$env:GITHUB_WORKSPACE" `
+            -Wait -PassThru -WindowStyle Hidden `
+            -RedirectStandardError $errLog
+          Get-Content $errLog -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) {
+            Write-Error "AHK syntax smoke failed with exit code $($p.ExitCode)"
+            exit $p.ExitCode
+          }
+
+      - name: Compile with Ahk2Exe
+        shell: pwsh
+        run: |
+          $out = "$env:RUNNER_TEMP\D4 HELPv7.1.exe"
+          $a2eArgs = @(
+            '/in', "`"$env:GITHUB_WORKSPACE\D4 HELPv7.1.ahk`"",
+            '/out', "`"$out`"",
+            '/base', "`"$env:RUNNER_TEMP\ahk\AutoHotkey64.exe`"",
+            '/ahk', "`"$env:RUNNER_TEMP\ahk\AutoHotkey64.exe`"",
+            '/silent'
+          )
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\ahk2exe\Ahk2Exe.exe" `
+            -ArgumentList $a2eArgs -Wait -PassThru -WindowStyle Hidden
+          if ($p.ExitCode -ne 0) {
+            Write-Error "Ahk2Exe failed with exit code $($p.ExitCode)"
+            exit $p.ExitCode
+          }
+          $f = Get-Item -LiteralPath $out
+          $hash = (Get-FileHash -LiteralPath $out -Algorithm SHA256).Hash
+          Write-Output "Compiled OK: $($f.FullName) $($f.Length) bytes"
+          Write-Output "SHA256: $hash"
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v7.1.${{ github.run_number }}"
+          $exe = "$env:RUNNER_TEMP\D4 HELPv7.1.exe"
+          gh release create $tag $exe `
+            --repo "${{ github.repository }}" `
+            --target "${{ github.sha }}" `
+            --title "D4 HELP v7.1 (build ${{ github.run_number }})" `
+            --generate-notes
