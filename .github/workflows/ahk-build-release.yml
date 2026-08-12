@@ -22,6 +22,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Download AutoHotkey v2.0.26 (official)
         shell: pwsh
@@ -86,9 +89,35 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "v7.1.${{ github.run_number }}"
+          $repo = "${{ github.repository }}"
           $exe = "$env:RUNNER_TEMP\D4 HELPv7.1.exe"
+          $notesFile = "$env:RUNNER_TEMP\release_notes.md"
+
+          # 取上一个 release 标签（当前 release 尚未创建）
+          $prev = (gh release list --repo $repo --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName' 2>$null)
+
+          if ($prev -and $prev -ne $tag) {
+            $range = "$prev..HEAD"
+            $header = "## 自 $prev 以来的更新"
+          } else {
+            $range = "HEAD"
+            $header = "## 更新说明（全量提交）"
+          }
+          $commits = git log --format="* %s (%h)" $range
+          if (-not $commits) {
+            $commits = "* 无新增提交"
+          }
+          $body = @(
+            $header
+            ""
+            $commits
+            ""
+            "完整提交记录: https://github.com/$repo/commits/$tag"
+          ) -join "`n"
+          Set-Content -LiteralPath $notesFile -Value $body -Encoding utf8
+
           gh release create $tag $exe `
-            --repo "${{ github.repository }}" `
+            --repo $repo `
             --target "${{ github.sha }}" `
             --title "D4 HELP v7.1 (build ${{ github.run_number }})" `
-            --generate-notes
+            --notes-file $notesFile
