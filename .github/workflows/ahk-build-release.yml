@@ -1,12 +1,14 @@
 name: Build & Release
 
-# 用户要求：master 分支有更新时自动打包发布。
+# 用户要求：主目录下的 .ahk 主脚本更新时自动打包发布（其他文件改动不触发）。
 # 本仓库实际默认分支是 main，为兼容用户习惯双监听 main + master。
 on:
   push:
     branches:
       - main
       - master
+    paths:
+      - 'D4 HELPv7.1.ahk'
   workflow_dispatch:
 
 permissions:

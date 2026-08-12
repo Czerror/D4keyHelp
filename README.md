@@ -161,7 +161,7 @@ KeyHandler  KeyQueue  PauseDetector  WindowManager
 
 仓库内置 GitHub Actions 工作流（`.github/workflows/ahk-build-release.yml`）：
 
-- `main` / `master` 分支有推送时自动触发（也可手动触发）
+- `main` / `master` 分支上主脚本 `D4 HELPv7.1.ahk` 有更新时自动触发（其他文件改动不触发，也可手动触发）
 - 下载官方 [AutoHotkey v2.0.26](https://www.autohotkey.com/download/) 与 [Ahk2Exe](https://github.com/AutoHotkey/Ahk2Exe) 编译器
 - 语法冒烟通过后用官方 Ahk2Exe 打包 `D4 HELPv7.1.exe`
 - 自动发布到 [Releases](https://github.com/Czerror/D4keyHelp/releases)，标签 `v7.1.<构建号>`，更新说明由 GitHub 根据提交自动生成
