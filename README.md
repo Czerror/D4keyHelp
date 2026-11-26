@@ -1,8 +1,8 @@
 # D4 HELP v7.1
 
-> 暗黑破坏神4 游戏辅助工具 · 基于 AutoHotkey v2.0.26 构建
+> 暗黑破坏神4 游戏辅助工具 · 基于 AutoHotkey v2.0.31 构建
 
-[![AutoHotkey](https://img.shields.io/badge/AutoHotkey-v2.0.26-3d8b37?logo=autohotkey)](https://www.autohotkey.com/download/)
+[![AutoHotkey](https://img.shields.io/badge/AutoHotkey-v2.0.31-3d8b37?logo=autohotkey)](https://www.autohotkey.com/download/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/Czerror/D4keyHelp)
 [![Version](https://img.shields.io/badge/version-7.1-orange)](https://github.com/Czerror/D4keyHelp)
 
@@ -28,13 +28,13 @@
 - [类架构文档](#类架构文档)
 - [常见问题](#常见问题)
 - [注意事项](#注意事项)
-- [版本历史](#版本历史)
+- [版本记录](CHANGELOG.md)
 
 ---
 
 ## 项目简介
 
-**D4 HELP** 是专为《暗黑破坏神4》设计的游戏辅助工具，基于 AutoHotkey v2.0.26 开发，v7.1 采用**完全面向对象的类架构**重写。
+**D4 HELP** 是专为《暗黑破坏神4》设计的游戏辅助工具，基于 AutoHotkey v2.0.31 开发，v7.1 采用**完全面向对象的类架构**重写。
 
 核心目标：减少重复性机械操作，在合法合规范围内提升游戏体验。
 
@@ -53,21 +53,20 @@
 
 ## AutoHotkey 官方下载
 
-本工具基于 **AutoHotkey v2.0.26**（官方最新稳定版）开发，脚本首行
-`#Requires AutoHotkey v2.0.26` 会强制要求该版本或更高版本，低于此版本将无法运行。
+脚本首行的 `#Requires AutoHotkey v2.0.31` 允许使用 **AutoHotkey v2.0.31** 或更新的 v2。冒烟和发布打包固定使用 v2.0.31。
 
 | 渠道 | 地址 |
 |------|------|
 | 官网下载页 | <https://www.autohotkey.com/download/> |
 | GitHub Releases（全部版本） | <https://github.com/AutoHotkey/AutoHotkey/releases> |
-| v2.0.26 安装包（推荐，含文件关联与启动器） | <https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.26/AutoHotkey_2.0.26_setup.exe> |
-| v2.0.26 便携版 ZIP | <https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.26/AutoHotkey_2.0.26.zip> |
+| v2.0.31 安装包（推荐，含文件关联与启动器） | <https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.31/AutoHotkey_2.0.31_setup.exe> |
+| v2.0.31 便携版 ZIP | <https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.31/AutoHotkey_2.0.31.zip> |
 
 官方校验值（SHA256）：
 
 ```
-2BF1B89B1047136490FC321D2FDC988B42DD86F693EEA7872746AC6ADF722BC3  AutoHotkey_2.0.26_setup.exe
-43522AA3122A57784AC5DB30ABF85C2244475C36ACD7796E2C993355F9E926AE  AutoHotkey_2.0.26.zip
+9224A3BD1757088320BF04C51EFA43511160766BFEE8D6555168293CD54B4C16  AutoHotkey_2.0.31_setup.exe
+CA1A595ACA4528755D8D4CD7FED23D497A37BD9A0B6892072612D68DEE1BD00A  AutoHotkey_2.0.31.zip
 ```
 
 ---
@@ -139,7 +138,7 @@ KeyHandler  KeyQueue  PauseDetector  WindowManager
 | 项目 | 要求 |
 |------|------|
 | 操作系统 | Windows 10 / 11 |
-| AutoHotkey | v2.0.26 或更高（[官方下载](#autohotkey-官方下载)） |
+| AutoHotkey | v2.0.31 或更新的 v2（[官方下载](#autohotkey-官方下载)） |
 | 游戏 | 暗黑破坏神4 |
 | 分辨率 | 基于 3840×2160 开发，支持自适应缩放 |
 
@@ -147,7 +146,7 @@ KeyHandler  KeyQueue  PauseDetector  WindowManager
 
 ## 快速开始
 
-1. 安装 [AutoHotkey v2.0.26](https://www.autohotkey.com/download/) 或更高版本
+1. 安装 AutoHotkey v2.0.31 或更新的 v2。[官方下载](#autohotkey-官方下载)
 2. 下载 [`D4 HELPv7.1.ahk`](D4%20HELPv7.1.ahk)
 3. 双击运行脚本（系统托盘出现图标）
 4. 默认按 `F1` 启动/停止宏
@@ -159,12 +158,11 @@ KeyHandler  KeyQueue  PauseDetector  WindowManager
 
 ## 自动构建与发布
 
-仓库内置 GitHub Actions 工作流（`.github/workflows/ahk-build-release.yml`）：
+日常开发和 PR 使用 `dev`。准备发布时，在同一提交中更新主脚本 `GUIManager.Initialize()` 的窗口标题版本，并将 [CHANGELOG.md](CHANGELOG.md) 的 `Unreleased` 条目按该版本和发布日期归档。在 `dev` 上通过 `AHK Smoke (dev)` 后，将远端 `main` 快进至该提交。
 
-- `main` / `master` 分支上主脚本 `D4 HELPv7.1.ahk` 有更新时自动触发（其他文件改动不触发，也可手动触发）
-- 下载官方 [AutoHotkey v2.0.26](https://www.autohotkey.com/download/) 与 [Ahk2Exe](https://github.com/AutoHotkey/Ahk2Exe) 编译器
-- 语法冒烟通过后用官方 Ahk2Exe 打包 `D4 HELPv7.1.exe`
-- 自动发布到 [Releases](https://github.com/Czerror/D4keyHelp/releases)，标签 `v7.1.<构建号>`，更新说明由 GitHub 根据提交自动生成
+小型改造递增补丁号，大型重构递增次版本号并将补丁号归零。主版本号仅按用户明确要求加一，同时清零次版本号与补丁号。
+
+在已快进的提交上创建并推送与窗口标题一致的三段数字版本标签（如 `v7.1.3`），即可启动 [Build & Release](.github/workflows/ahk-build-release.yml)。工作流核对版本和提交，使用官方 AutoHotkey v2.0.31 和 Ahk2Exe 做语法冒烟并编译 EXE，再将带版本号的文件附到同名 [GitHub Release](https://github.com/Czerror/D4keyHelp/releases)。
 
 ---
 
@@ -313,7 +311,7 @@ v7.1 采用 11 个静态类组成的模块化架构：
 
 ### 程序无法启动
 
-1. 确认已安装 AutoHotkey v2.0.26+（[官方下载](#autohotkey-官方下载)）
+1. 确认已安装 AutoHotkey v2.0.31 或更新的 v2（[官方下载](#autohotkey-官方下载)）
 2. 检查杀毒软件是否拦截
 3. 尝试以管理员身份运行
 
@@ -357,19 +355,6 @@ v7.1 采用 11 个静态类组成的模块化架构：
 - 本程序仅供学习研究用途
 - 使用者自行承担使用风险
 - 开发者不对账号安全负责
-
----
-
-## 版本历史
-
-| 版本 | 日期 | 变更 |
-|------|------|------|
-| v7.1 | 2026-08 | 按键处理优化批次：输入校验与启动保护、uniqueKey 冲突修复、队列检测合并与异常隔离、魔法数字收敛、schema 缓存、发送路径合并、CI 冒烟；并含随机延迟修复、移除像素缓存、升级 AutoHotkey v2.0.26、配置 UTF-16 |
-| v7.0 | 2026-04 | 类架构重写，引入优先级队列、防抖动机制（已归档 `old/`） |
-| v6.0 | 2025-08 | 重构灰色检测逻辑、窗口管理 |
-| v5.3 | — | 优化代码段可读性 |
-| v4.1 | — | 功能迭代 |
-| v3.0 | — | 初始版本 |
 
 ---
 

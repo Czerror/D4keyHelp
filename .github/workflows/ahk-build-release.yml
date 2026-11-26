@@ -1,38 +1,53 @@
 name: Build & Release
 
-# 用户要求：主目录下的 .ahk 主脚本更新时自动打包发布（其他文件改动不触发）。
-# 本仓库实际默认分支是 main，为兼容用户习惯双监听 main + master。
 on:
   push:
-    branches:
-      - main
-      - master
-    paths:
-      - 'D4 HELPv7.1.ahk'
-  workflow_dispatch:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 permissions:
   contents: write
 
 concurrency:
-  group: build-release
+  group: build-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   build:
+    if: github.event_name == 'push' && github.ref_type == 'tag' && !github.event.deleted
     runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Download AutoHotkey v2.0.26 (official)
+      - name: Verify release commit and window title
         shell: pwsh
         run: |
-          $ahkZip = "$env:RUNNER_TEMP\AutoHotkey_2.0.26.zip"
-          Invoke-WebRequest -Uri "https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.26/AutoHotkey_2.0.26.zip" -OutFile $ahkZip
+          git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch origin/main.' }
+          git merge-base --is-ancestor HEAD refs/remotes/origin/main
+          if ($LASTEXITCODE -ne 0) { throw 'The checkout must be in origin/main history.' }
+
+          $tag = $env:GITHUB_REF_NAME
+          $entry = Get-Content -Raw -LiteralPath "$env:GITHUB_WORKSPACE\D4 HELPv7.1.ahk"
+          $gui = [regex]::Match($entry, '(?ms)^class[ \t]+GUIManager[ \t]*\{.*?^\}').Value
+          $titles = [regex]::Matches($gui, '(?m)^[ \t]*this\.myGui\s*:=\s*Gui\(\s*""\s*,\s*"D4 HELP ([^ \t"\r\n]+)')
+          if ($titles.Count -ne 1) { throw 'Expected one D4 HELP main window title in GUIManager.' }
+          $windowVersion = $titles[0].Groups[1].Value
+          if ($windowVersion -cne $tag) {
+            throw "The window title version $windowVersion must match the release tag $tag."
+          }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "D4_RELEASE_EXE=$env:RUNNER_TEMP\D4 HELP$tag.exe" -Encoding utf8
+
+      - name: Download AutoHotkey v2.0.31 (official)
+        shell: pwsh
+        run: |
+          $ahkZip = "$env:RUNNER_TEMP\AutoHotkey_2.0.31.zip"
+          Invoke-WebRequest -Uri "https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.31/AutoHotkey_2.0.31.zip" -OutFile $ahkZip
           Expand-Archive -Path $ahkZip -DestinationPath "$env:RUNNER_TEMP\ahk"
           Get-Item "$env:RUNNER_TEMP\ahk\AutoHotkey64.exe" | Select-Object Name, Length
 
@@ -66,7 +81,7 @@ jobs:
       - name: Compile with Ahk2Exe
         shell: pwsh
         run: |
-          $out = "$env:RUNNER_TEMP\D4 HELPv7.1.exe"
+          $out = $env:D4_RELEASE_EXE
           $a2eArgs = @(
             '/in', "`"$env:GITHUB_WORKSPACE\D4 HELPv7.1.ahk`"",
             '/out', "`"$out`"",
@@ -90,9 +105,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "v7.1.${{ github.run_number }}"
-          $repo = "${{ github.repository }}"
-          $exe = "$env:RUNNER_TEMP\D4 HELPv7.1.exe"
+          $tag = $env:GITHUB_REF_NAME
+          $repo = $env:GITHUB_REPOSITORY
           $notesFile = "$env:RUNNER_TEMP\release_notes.md"
 
           # 取上一个 release 标签（当前 release 尚未创建）
@@ -118,8 +132,22 @@ jobs:
           ) -join "`n"
           Set-Content -LiteralPath $notesFile -Value $body -Encoding utf8
 
-          gh release create $tag $exe `
+          # 发布前从远端重新读取标签和 main，避免使用 checkout 时缓存的引用。
+          git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main' "+refs/tags/${tag}:refs/release/tag"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch the release tag and origin/main.' }
+          $tagCommit = git rev-parse --verify 'refs/release/tag^{commit}'
+          if ($LASTEXITCODE -ne 0) { throw 'The release tag must point to a commit.' }
+          $eventCommit = git rev-parse --verify "${env:GITHUB_SHA}^{commit}"
+          if ($LASTEXITCODE -ne 0) { throw 'The push event must point to a commit.' }
+          $checkoutCommit = git rev-parse --verify HEAD
+          if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $eventCommit -or $tagCommit -ne $checkoutCommit) {
+            throw 'The remote tag no longer matches the push event and checkout.'
+          }
+          git merge-base --is-ancestor $tagCommit refs/remotes/origin/main
+          if ($LASTEXITCODE -ne 0) { throw 'The release tag must point to a commit in origin/main history.' }
+
+          gh release create $tag $env:D4_RELEASE_EXE `
             --repo $repo `
-            --target "${{ github.sha }}" `
-            --title "D4 HELP v7.1 (build ${{ github.run_number }})" `
+            --verify-tag `
+            --title "D4 HELP $tag" `
             --notes-file $notesFile

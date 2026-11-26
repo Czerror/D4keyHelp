@@ -1,4 +1,4 @@
-#Requires AutoHotkey v2.0.26
+#Requires AutoHotkey v2.0.31
 #SingleInstance Force
 ProcessSetPriority "High"
 
