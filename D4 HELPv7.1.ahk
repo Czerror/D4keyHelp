@@ -933,7 +933,7 @@ class KeyHandler {
         if (GUIManager.RunMod.Value == 1) {
             ; 先按新随机间隔重新武装一次性定时器，再执行按键，避免执行异常中断后续触发
             timerFunc := () => (
-                SetTimer(timerFunc, -this._NextInterval(keyData)),
+                SetTimer(, -this._NextInterval(keyData)),
                 this.HandleKeyMode(keyData)
             )
             this.skillTimers[keyData.uniqueKey] := timerFunc
