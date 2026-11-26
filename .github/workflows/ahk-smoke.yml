@@ -2,10 +2,13 @@ name: AHK Smoke
 
 on:
   push:
+    branches-ignore:
+      - oldback
   pull_request:
 
 jobs:
   smoke:
+    name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev' && !github.event.deleted && 'AHK Smoke (dev)' || 'smoke' }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

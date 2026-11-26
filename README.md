@@ -28,7 +28,7 @@
 - [类架构文档](#类架构文档)
 - [常见问题](#常见问题)
 - [注意事项](#注意事项)
-- [版本历史](#版本历史)
+- [版本记录](CHANGELOG.md)
 
 ---
 
@@ -159,12 +159,11 @@ KeyHandler  KeyQueue  PauseDetector  WindowManager
 
 ## 自动构建与发布
 
-仓库内置 GitHub Actions 工作流（`.github/workflows/ahk-build-release.yml`）：
+日常开发和 PR 使用 `dev`。准备发布时，在同一提交中更新主脚本 `GUIManager.Initialize()` 的窗口标题版本，并将 [CHANGELOG.md](CHANGELOG.md) 的 `Unreleased` 条目归入该版本。在 `dev` 上通过 `AHK Smoke (dev)` 后，将远端 `main` 快进至该提交。
 
-- `main` / `master` 分支上主脚本 `D4 HELPv7.1.ahk` 有更新时自动触发（其他文件改动不触发，也可手动触发）
-- 下载官方 [AutoHotkey v2.0.26](https://www.autohotkey.com/download/) 与 [Ahk2Exe](https://github.com/AutoHotkey/Ahk2Exe) 编译器
-- 语法冒烟通过后用官方 Ahk2Exe 打包 `D4 HELPv7.1.exe`
-- 自动发布到 [Releases](https://github.com/Czerror/D4keyHelp/releases)，标签 `v7.1.<构建号>`，更新说明由 GitHub 根据提交自动生成
+小型改造递增补丁号，大型重构递增次版本号并将补丁号归零。主版本号仅按用户明确要求加一，同时清零次版本号与补丁号。
+
+在已快进的提交上创建并推送与窗口标题一致的三段数字版本标签（如 `v7.1.3`），即可启动 [Build & Release](.github/workflows/ahk-build-release.yml)。工作流核对版本和提交，使用官方 AutoHotkey v2.0.26 和 Ahk2Exe 做语法冒烟并编译 EXE，再将带版本号的文件附到同名 [GitHub Release](https://github.com/Czerror/D4keyHelp/releases)。
 
 ---
 
@@ -357,19 +356,6 @@ v7.1 采用 11 个静态类组成的模块化架构：
 - 本程序仅供学习研究用途
 - 使用者自行承担使用风险
 - 开发者不对账号安全负责
-
----
-
-## 版本历史
-
-| 版本 | 日期 | 变更 |
-|------|------|------|
-| v7.1 | 2026-08 | 按键处理优化批次：输入校验与启动保护、uniqueKey 冲突修复、队列检测合并与异常隔离、魔法数字收敛、schema 缓存、发送路径合并、CI 冒烟；并含随机延迟修复、移除像素缓存、升级 AutoHotkey v2.0.26、配置 UTF-16 |
-| v7.0 | 2026-04 | 类架构重写，引入优先级队列、防抖动机制（已归档 `old/`） |
-| v6.0 | 2025-08 | 重构灰色检测逻辑、窗口管理 |
-| v5.3 | — | 优化代码段可读性 |
-| v4.1 | — | 功能迭代 |
-| v3.0 | — | 初始版本 |
 
 ---
 
