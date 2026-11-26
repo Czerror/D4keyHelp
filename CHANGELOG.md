@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 主脚本的最低运行版本和 Windows 冒烟、EXE 打包基线统一为 AutoHotkey v2.0.31。
 - 开发和 PR 使用 `dev`，`main` 只快进到通过开发分支冒烟的提交。发版时校验三段数字版本标签与主窗口标题一致，发布的 EXE 使用同一版本号。
 - 7 个旧版 AHK 脚本已移至 [oldback 备份分支](https://github.com/Czerror/D4keyHelp/tree/oldback)。
 

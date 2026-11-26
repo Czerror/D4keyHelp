@@ -43,11 +43,11 @@ jobs:
           }
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "D4_RELEASE_EXE=$env:RUNNER_TEMP\D4 HELP$tag.exe" -Encoding utf8
 
-      - name: Download AutoHotkey v2.0.26 (official)
+      - name: Download AutoHotkey v2.0.31 (official)
         shell: pwsh
         run: |
-          $ahkZip = "$env:RUNNER_TEMP\AutoHotkey_2.0.26.zip"
-          Invoke-WebRequest -Uri "https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.26/AutoHotkey_2.0.26.zip" -OutFile $ahkZip
+          $ahkZip = "$env:RUNNER_TEMP\AutoHotkey_2.0.31.zip"
+          Invoke-WebRequest -Uri "https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.31/AutoHotkey_2.0.31.zip" -OutFile $ahkZip
           Expand-Archive -Path $ahkZip -DestinationPath "$env:RUNNER_TEMP\ahk"
           Get-Item "$env:RUNNER_TEMP\ahk\AutoHotkey64.exe" | Select-Object Name, Length
 
