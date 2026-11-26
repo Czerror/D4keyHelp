@@ -53,8 +53,7 @@
 
 ## AutoHotkey 官方下载
 
-本工具基于 **AutoHotkey v2.0.31**开发，脚本首行
-`#Requires AutoHotkey v2.0.31` 会强制要求该版本或更高版本，低于此版本将无法运行。
+脚本首行的 `#Requires AutoHotkey v2.0.31` 允许使用 **AutoHotkey v2.0.31** 或更新的 v2。冒烟和发布打包固定使用 v2.0.31。
 
 | 渠道 | 地址 |
 |------|------|
@@ -139,7 +138,7 @@ KeyHandler  KeyQueue  PauseDetector  WindowManager
 | 项目 | 要求 |
 |------|------|
 | 操作系统 | Windows 10 / 11 |
-| AutoHotkey | v2.0.31 或更高（[官方下载](#autohotkey-官方下载)） |
+| AutoHotkey | v2.0.31 或更新的 v2（[官方下载](#autohotkey-官方下载)） |
 | 游戏 | 暗黑破坏神4 |
 | 分辨率 | 基于 3840×2160 开发，支持自适应缩放 |
 
@@ -147,7 +146,7 @@ KeyHandler  KeyQueue  PauseDetector  WindowManager
 
 ## 快速开始
 
-1. 安装 [AutoHotkey v2.0.31](https://www.autohotkey.com/download/) 或更高版本
+1. 安装 AutoHotkey v2.0.31 或更新的 v2。[官方下载](#autohotkey-官方下载)
 2. 下载 [`D4 HELPv7.1.ahk`](D4%20HELPv7.1.ahk)
 3. 双击运行脚本（系统托盘出现图标）
 4. 默认按 `F1` 启动/停止宏
@@ -312,7 +311,7 @@ v7.1 采用 11 个静态类组成的模块化架构：
 
 ### 程序无法启动
 
-1. 确认已安装 AutoHotkey v2.0.31+（[官方下载](#autohotkey-官方下载)）
+1. 确认已安装 AutoHotkey v2.0.31 或更新的 v2（[官方下载](#autohotkey-官方下载)）
 2. 检查杀毒软件是否拦截
 3. 尝试以管理员身份运行
 
