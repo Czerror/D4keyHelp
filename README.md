@@ -159,7 +159,7 @@ KeyHandler  KeyQueue  PauseDetector  WindowManager
 
 ## 自动构建与发布
 
-日常开发和 PR 使用 `dev`。准备发布时，在同一提交中更新主脚本 `GUIManager.Initialize()` 的窗口标题版本，并将 [CHANGELOG.md](CHANGELOG.md) 的 `Unreleased` 条目归入该版本。在 `dev` 上通过 `AHK Smoke (dev)` 后，将远端 `main` 快进至该提交。
+日常开发和 PR 使用 `dev`。准备发布时，在同一提交中更新主脚本 `GUIManager.Initialize()` 的窗口标题版本，并将 [CHANGELOG.md](CHANGELOG.md) 的 `Unreleased` 条目按该版本和发布日期归档。在 `dev` 上通过 `AHK Smoke (dev)` 后，将远端 `main` 快进至该提交。
 
 小型改造递增补丁号，大型重构递增次版本号并将补丁号归零。主版本号仅按用户明确要求加一，同时清零次版本号与补丁号。
 

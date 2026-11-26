@@ -2,8 +2,6 @@ name: AHK Smoke
 
 on:
   push:
-    branches-ignore:
-      - oldback
   pull_request:
 
 jobs:
