@@ -1992,13 +1992,13 @@ class ConfigManager {
             return false
         }
     }
-    /** 从控件Map提取字段值并序列化写入INI */
-    static _SaveCtrl(section, key, ctrlMap, fieldDefs) {
+    /** 从控件Map提取字段值并序列化为CSV */
+    static _SerializeCtrl(ctrlMap, fieldDefs) {
         values := []
         for fieldDef in fieldDefs {
             values.Push(ctrlMap[fieldDef.name].Value)
         }
-        this.Write(section, key, UtilityHelper.Join(values, ","))
+        return UtilityHelper.Join(values, ",")
     }
     /** 从INI读取CSV并按字段定义回填控件Map */
     static _LoadCtrl(section, key, ctrlMap, fieldDefs, defaultCSV) {
@@ -2100,20 +2100,29 @@ class ConfigManager {
      * 将当前UI配置序列化写入INI
      */
     static SaveProfile(profileName) {
+        if (profileName = "" || profileName = "Profiles" || profileName = "Global" || RegExMatch(profileName, "[|\]\r\n]"))
+            return false
+
         try {
-            this.DeleteSection(profileName)
-            section := profileName
+            pairs := []
             for item in this._BuildConfigSchema() {
-                this._SaveCtrl(section, item.key, this._GetCtrl(item.ctrlType, item.ctrlId), item.fields)
+                pairs.Push(item.key "=" this._SerializeCtrl(this._GetCtrl(item.ctrlType, item.ctrlId), item.fields))
             }
-            this.Write(section, "runMode", GUIManager.RunMod.Value)
-            this.Write(section, "shift", GUIManager.uCtrl["shift"]["enable"].Value)
-            this.Write(section, "D4only", GUIManager.uCtrl["D4only"]["enable"].Value)
-            this.Write(section, "xyX", GUIManager.uCtrl["xy"]["x"].Value)
-            this.Write(section, "xyY", GUIManager.uCtrl["xy"]["y"].Value)
-            this.Write(section, "hotkeyMode", GUIManager.startkey["mode"].Value)
-            this.Write(section, "useHotKey", GUIManager.startkey["userkey"][1].key)
-            return true
+            pairs.Push(
+                "runMode=" GUIManager.RunMod.Value,
+                "shift=" GUIManager.uCtrl["shift"]["enable"].Value,
+                "D4only=" GUIManager.uCtrl["D4only"]["enable"].Value,
+                "xyX=" GUIManager.uCtrl["xy"]["x"].Value,
+                "xyY=" GUIManager.uCtrl["xy"]["y"].Value,
+                "hotkeyMode=" GUIManager.startkey["mode"].Value,
+                "useHotKey=" GUIManager.startkey["userkey"][1].key
+            )
+            profileList := this.GetProfileList()
+            if (!this.ProfileExists(profileName, profileList))
+                profileList.Push(profileName)
+
+            IniWrite(UtilityHelper.Join(pairs, "`n"), this.settingsFile, profileName)
+            return this.SaveProfileList(profileList) && this.SetLastUsedProfile(profileName)
         } catch as err {
             UtilityHelper.ReportError("保存配置失败: " . err.Message)
             return false
@@ -2156,10 +2165,8 @@ class ConfigManager {
                 break
             }
         }
-        if (!found) {
+        if (!found)
             profileList.InsertAt(1, this.defaultProfile)
-            this.Write("Profiles", "List", UtilityHelper.Join(profileList, "|"))
-        }
         return profileList
     }
     static SaveProfileList(profileList) {
@@ -2193,9 +2200,8 @@ class ConfigManager {
             return false
         }
     }
-    static ProfileExists(profileName) {
-        profileList := this.GetProfileList()
-        for profile in profileList {
+    static ProfileExists(profileName, profileList?) {
+        for profile in profileList ?? this.GetProfileList() {
             if (profile = profileName) {
                 return true
             }
@@ -2255,16 +2261,11 @@ class ConfigManager {
         profileNameInput := Trim(GUIManager.profileName.Text)
         if (!this.SaveProfile(profileNameInput)) {
             GUIManager.statusBar.Text := "保存配置失败"
-            return
-        }
-        if (!this.ProfileExists(profileNameInput)) {
-            profileList := this.GetProfileList()
-            profileList.Push(profileNameInput)
-            this.SaveProfileList(profileList)
+            return false
         }
         this.UpdateDropDown(GUIManager.profileName, profileNameInput)
-        this.SetLastUsedProfile(profileNameInput)
         GUIManager.statusBar.Text := "配置方案「" profileNameInput "」已保存"
+        return true
     }
     /**
      * 加载选中的配置方案（兼容字符串和控件两种入参）
@@ -2295,7 +2296,10 @@ class ConfigManager {
             return
         }
         if (currentProfileName = this.defaultProfile) {
-            this.DeleteSection(this.defaultProfile)
+            if (!this.DeleteSection(this.defaultProfile)) {
+                GUIManager.statusBar.Text := "删除配置失败"
+                return
+            }
             this.LoadSelectedProfile(this.defaultProfile)
             GUIManager.statusBar.Text := "默认配置已重置"
             return
