@@ -1225,9 +1225,13 @@ class KeyQueueManager {
         keyData.priority := this.GetPriority(keyData.mode, keyData.id)
         this.keyConfigCache[uniqueKey] := keyData
         if (!this.expectedNext.Has(uniqueKey)) {
-            this.expectedNext[uniqueKey] := A_TickCount - keyData.interval
+            this.expectedNext[uniqueKey] := this._Now() - keyData.interval
         }
         this._ScheduleNext()
+    }
+
+    static _Now() {
+        return DllCall("GetTickCount64", "UInt64")
     }
     
     /**
@@ -1265,7 +1269,7 @@ class KeyQueueManager {
         ; 批次执行期间不可被热键/其他线程中断，避免停止后回写队列造成残留
         Critical
         try {
-            now := A_TickCount
+            now := this._Now()
             dueEntries := []
             for uniqueKey, config in this.keyConfigCache {
                 nextExec := this.expectedNext.Get(uniqueKey, 0)
@@ -1292,7 +1296,7 @@ class KeyQueueManager {
                     UtilityHelper.ReportError("队列按键执行失败: " . entry.config.uniqueKey . " - " . err.Message)
                     ; 失败后按间隔推后调度，避免因 expectedNext 停留在过去而形成紧循环
                     if (this.expectedNext.Has(entry.config.uniqueKey)) {
-                        this.expectedNext[entry.config.uniqueKey] := A_TickCount + Max(entry.config.interval, this.MIN_INTERVAL)
+                        this.expectedNext[entry.config.uniqueKey] := this._Now() + Max(entry.config.interval, this.MIN_INTERVAL)
                     }
                 }
             }
@@ -1319,7 +1323,7 @@ class KeyQueueManager {
             SetTimer(this.QueueWorkerFunc, 0)
             return
         }
-        SetTimer(this.QueueWorkerFunc, -Max(nextWake - A_TickCount, this.MIN_WAKE_INTERVAL))
+        SetTimer(this.QueueWorkerFunc, -Max(nextWake - this._Now(), this.MIN_WAKE_INTERVAL))
     }
     
     /**
