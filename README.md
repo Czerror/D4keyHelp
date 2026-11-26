@@ -12,7 +12,6 @@
 
 - [项目简介](#项目简介)
 - [AutoHotkey 官方下载](#autohotkey-官方下载)
-- [架构概览](#架构概览)
 - [核心功能](#核心功能)
 - [系统要求](#系统要求)
 - [快速开始](#快速开始)
@@ -25,7 +24,7 @@
   - [检测系统](#检测系统)
   - [配置管理](#配置管理)
   - [辅助功能](#辅助功能)
-- [类架构文档](#类架构文档)
+- [类架构文档](docs/architecture/README.md)
 - [常见问题](#常见问题)
 - [注意事项](#注意事项)
 - [版本记录](CHANGELOG.md)
@@ -42,7 +41,6 @@
 
 | 特性 | 说明 |
 |------|------|
-| 🏗️ 类架构重写 | 10 个静态类模块化设计，职责清晰 |
 | 🔄 优先级队列 | 单线程模式按键优先级排序执行 |
 | 🎲 逐次随机延迟 | 每次按键触发都在间隔上叠加 1-10ms 随机，多线程/单线程均生效 |
 | 🛡️ 防抖动机制 | 阈值计数器避免检测抖动误触发 |
@@ -67,37 +65,6 @@
 ```
 9224A3BD1757088320BF04C51EFA43511160766BFEE8D6555168293CD54B4C16  AutoHotkey_2.0.31_setup.exe
 CA1A595ACA4528755D8D4CD7FED23D497A37BD9A0B6892072612D68DEE1BD00A  AutoHotkey_2.0.31.zip
-```
-
----
-
-## 架构概览
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    GUIManager                            │
-│              主界面 · 控件 · 状态栏                        │
-└──────────┬──────────────────────────────────────────────┘
-           │
-     ┌─────┴──────────────────────┐
-     │     MacroController         │
-     │   宏启停 · 暂停协调          │
-     └─────┬──────────────────────┘
-           │
-  ┌────────┼────────┬──────────┬───────────┐
-  │        │        │          │           │
-  ▼        ▼        ▼          ▼           ▼
-KeyHandler  KeyQueue  PauseDetector  WindowManager
-按键处理    单线程队列   暂停检测      窗口·坐标
-  │                     │              │
-  └─────────┬───────────┘              │
-            ▼                          ▼
-     ColorDetector              HotkeyManager
-     颜色检测                    热键管理
-            │
-            ▼
-     ConfigManager            UtilityHelper
-     配置持久化                 工具函数
 ```
 
 ---
@@ -265,6 +232,8 @@ TAB 界面 ──┼──→ MacroController.TogglePause() ──→ 暂停/恢
 > 设计说明：颜色检测采用单点逐次取色（`PixelGetColor`），不引入像素缓存或整屏/区域
 > 批量截图（GDI+ BitBlt 等），以降低被游戏反作弊机制检测的风险。
 
+`PixelGetColor` 返回每通道 8 位的 RGB。开启 HDR 后，技能绿条和血条能否命中现有阈值，需要在实际游戏画面核对。
+
 ### 配置管理
 
 - 配置数据存储在 `settings.ini`
@@ -282,28 +251,6 @@ TAB 界面 ──┼──→ MacroController.TogglePause() ──→ 暂停/恢
 | 鼠标自移 | 6 个固定点位循环移动鼠标 | 关闭 |
 | 双击暂停 | 双击左键暂停 1-3 秒 | 开启 / 2秒 |
 | 窗口置顶 | 脚本窗口保持最前 | 关闭 |
-
----
-
-## 类架构文档
-
-v7.1 采用 11 个静态类组成的模块化架构：
-
-| 类名 | 职责 | 关键方法 |
-|------|------|----------|
-| [`GUIManager`](D4%20HELPv7.1.ahk:14) | GUI 创建与状态管理 | `Initialize()`, `UpdateStatus()` |
-| [`HotkeyManager`](D4%20HELPv7.1.ahk:357) | 全局热键注册/更新 | `LoadStartHotkey()`, `UpdateHotkeyText()` |
-| [`UtilityHelper`](D4%20HELPv7.1.ahk:452) | 通用工具函数 | `RandomDelay()`, `DebugLog()`, `LimitEditValue()` |
-| [`MacroController`](D4%20HELPv7.1.ahk:627) | 宏生命周期与暂停协调 | `ToggleMacro()`, `TogglePause()` |
-| [`KeyHandler`](D4%20HELPv7.1.ahk:815) | 按键执行与模式分发 | `HandleKeyMode()`, `PressKeyCallback()` |
-| [`KeyQueueManager`](D4%20HELPv7.1.ahk:1186) | 单线程优先级队列 | `EnqueueKey()`, `ProcessCycle()` |
-| [`WindowManager`](D4%20HELPv7.1.ahk:1393) | 窗口检测与坐标转换 | `GetWindowInfo()`, `ConvertCoord()` |
-| [`HysteresisTracker`](D4%20HELPv7.1.ahk:1558) | 迟滞阈值计数去抖 | `Update()`, `Reset()` |
-| [`PauseDetector`](D4%20HELPv7.1.ahk:1613) | 暂停条件检测 | `AutoPauseByBlood()`, `AutoPauseByTAB()` |
-| [`ColorDetector`](D4%20HELPv7.1.ahk:1876) | 像素取色与颜色判断 | `GetPixelRGB()`, `IsRed()`, `IsGreen()`… |
-| [`ConfigManager`](D4%20HELPv7.1.ahk:1959) | INI 配置读写与方案管理 | `SaveProfile()`, `LoadProfile()` |
-
-所有类均为纯静态方法，无实例化开销。
 
 ---
 

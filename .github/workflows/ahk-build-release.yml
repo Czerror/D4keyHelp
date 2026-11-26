@@ -60,15 +60,12 @@ jobs:
           Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\ahk2exe"
           Get-Item "$env:RUNNER_TEMP\ahk2exe\Ahk2Exe.exe" | Select-Object Name, Length
 
-      - name: Syntax smoke (real script, entry replaced with ExitApp)
+      - name: Validate the release script
         shell: pwsh
         run: |
-          $entry = Get-Content -Raw -LiteralPath "$env:GITHUB_WORKSPACE\D4 HELPv7.1.ahk"
-          $smoke = $entry -replace 'GUIManager\.Initialize\(\)', 'ExitApp()'
-          Set-Content -LiteralPath "$env:GITHUB_WORKSPACE\smoke.ahk" -Value $smoke -Encoding utf8
           $errLog = "$env:RUNNER_TEMP\smoke_err.txt"
           $p = Start-Process -FilePath "$env:RUNNER_TEMP\ahk\AutoHotkey64.exe" `
-            -ArgumentList '/ErrorStdOut', 'smoke.ahk' `
+            -ArgumentList '/ErrorStdOut=UTF-8 /Validate "D4 HELPv7.1.ahk"' `
             -WorkingDirectory "$env:GITHUB_WORKSPACE" `
             -Wait -PassThru -WindowStyle Hidden `
             -RedirectStandardError $errLog
