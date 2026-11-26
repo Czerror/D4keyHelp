@@ -79,9 +79,10 @@ class GUIManager {
      */
     static ExitApp() {
         MacroController.StopMacro()
+        this.UpdateStatus("已停止", "宏已停止")
         if (!ConfigManager.SaveProfileFromUI()
             && MsgBox("配置保存失败。仍要退出吗？", "D4 HELP", "YesNo Icon! Default2") != "Yes")
-            return
+            return true
         ExitApp()
     }
     

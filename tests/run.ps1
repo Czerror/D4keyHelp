@@ -1,6 +1,6 @@
 param(
     [string] $SourceFile = (Join-Path $PSScriptRoot '..\D4 HELPv7.1.ahk'),
-    [string[]] $TestFile = @('lifecycle.ahk', 'config.ahk', 'timers.ahk', 'colors.ahk'),
+    [string[]] $TestFile = @('startup', 'lifecycle.ahk', 'config.ahk'),
     [string] $AhkPath = 'AutoHotkey64.exe',
     [string] $ScratchDir = [System.IO.Path]::GetTempPath()
 )
@@ -24,9 +24,17 @@ foreach ($test in $TestFile) {
     $probe = Join-Path $work 'probe.ahk'
     $out = Join-Path $work 'stdout.txt'
     $err = Join-Path $work 'stderr.txt'
-    $body = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $path))
-    [System.IO.File]::WriteAllText($probe, "$support`n$classes`n$exitHooks`n$body`nCompleteTest()`n", $utf8)
-    $arguments = '/ErrorStdOut=UTF-8 /CP65001 "' + $probe + '"'
+    if ($test -eq 'startup') {
+        # A preloaded observer checks the real entry point while it is idle.
+        $app = Join-Path $work ([System.IO.Path]::GetFileName($SourceFile))
+        Copy-Item -LiteralPath $SourceFile -Destination $app
+        $observer = Join-Path $PSScriptRoot 'startup.ahk'
+        $arguments = "/ErrorStdOut=UTF-8 /CP65001 /include `"$observer`" `"$app`""
+    } else {
+        $body = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $path))
+        [System.IO.File]::WriteAllText($probe, "$support`n$classes`n$exitHooks`n$body`nCompleteTest()`n", $utf8)
+        $arguments = '/ErrorStdOut=UTF-8 /CP65001 "' + $probe + '"'
+    }
     $process = Start-Process -FilePath $exe -ArgumentList $arguments -WorkingDirectory $work `
         -WindowStyle Hidden -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
     if (-not $process.WaitForExit(15000)) {
