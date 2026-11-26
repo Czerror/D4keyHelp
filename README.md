@@ -265,6 +265,8 @@ TAB 界面 ──┼──→ MacroController.TogglePause() ──→ 暂停/恢
 > 设计说明：颜色检测采用单点逐次取色（`PixelGetColor`），不引入像素缓存或整屏/区域
 > 批量截图（GDI+ BitBlt 等），以降低被游戏反作弊机制检测的风险。
 
+`PixelGetColor` 返回每通道 8 位的 RGB。开启 HDR 后，技能绿条和血条能否命中现有阈值，需要在实际游戏画面核对。
+
 ### 配置管理
 
 - 配置数据存储在 `settings.ini`
@@ -291,17 +293,17 @@ v7.1 采用 11 个静态类组成的模块化架构：
 
 | 类名 | 职责 | 关键方法 |
 |------|------|----------|
-| [`GUIManager`](D4%20HELPv7.1.ahk:14) | GUI 创建与状态管理 | `Initialize()`, `UpdateStatus()` |
-| [`HotkeyManager`](D4%20HELPv7.1.ahk:357) | 全局热键注册/更新 | `LoadStartHotkey()`, `UpdateHotkeyText()` |
-| [`UtilityHelper`](D4%20HELPv7.1.ahk:452) | 通用工具函数 | `RandomDelay()`, `DebugLog()`, `LimitEditValue()` |
-| [`MacroController`](D4%20HELPv7.1.ahk:627) | 宏生命周期与暂停协调 | `ToggleMacro()`, `TogglePause()` |
-| [`KeyHandler`](D4%20HELPv7.1.ahk:815) | 按键执行与模式分发 | `HandleKeyMode()`, `PressKeyCallback()` |
-| [`KeyQueueManager`](D4%20HELPv7.1.ahk:1186) | 单线程优先级队列 | `EnqueueKey()`, `ProcessCycle()` |
-| [`WindowManager`](D4%20HELPv7.1.ahk:1393) | 窗口检测与坐标转换 | `GetWindowInfo()`, `ConvertCoord()` |
-| [`HysteresisTracker`](D4%20HELPv7.1.ahk:1558) | 迟滞阈值计数去抖 | `Update()`, `Reset()` |
-| [`PauseDetector`](D4%20HELPv7.1.ahk:1613) | 暂停条件检测 | `AutoPauseByBlood()`, `AutoPauseByTAB()` |
-| [`ColorDetector`](D4%20HELPv7.1.ahk:1876) | 像素取色与颜色判断 | `GetPixelRGB()`, `IsRed()`, `IsGreen()`… |
-| [`ConfigManager`](D4%20HELPv7.1.ahk:1959) | INI 配置读写与方案管理 | `SaveProfile()`, `LoadProfile()` |
+| [`GUIManager`](D4%20HELPv7.1.ahk#L14) | GUI 创建与状态管理 | `Initialize()`, `UpdateStatus()` |
+| [`HotkeyManager`](D4%20HELPv7.1.ahk#L353) | 全局热键注册/更新 | `LoadStartHotkey()`, `UpdateHotkeyText()` |
+| [`UtilityHelper`](D4%20HELPv7.1.ahk#L448) | 通用工具函数 | `RandomDelay()`, `DebugLog()`, `LimitEditValue()` |
+| [`MacroController`](D4%20HELPv7.1.ahk#L626) | 宏生命周期与暂停协调 | `ToggleMacro()`, `TogglePause()` |
+| [`KeyHandler`](D4%20HELPv7.1.ahk#L845) | 按键执行与模式分发 | `HandleKeyMode()`, `PressKeyCallback()` |
+| [`KeyQueueManager`](D4%20HELPv7.1.ahk#L1232) | 单线程优先级队列 | `EnqueueKey()`, `ProcessCycle()` |
+| [`WindowManager`](D4%20HELPv7.1.ahk#L1443) | 窗口检测与坐标转换 | `GetWindowInfo()`, `ConvertCoord()` |
+| [`HysteresisTracker`](D4%20HELPv7.1.ahk#L1608) | 迟滞阈值计数去抖 | `Update()`, `Reset()` |
+| [`PauseDetector`](D4%20HELPv7.1.ahk#L1663) | 暂停条件检测 | `AutoPauseByBlood()`, `AutoPauseByTAB()` |
+| [`ColorDetector`](D4%20HELPv7.1.ahk#L1934) | 像素取色与颜色判断 | `GetPixelRGB()`, `IsRed()`, `IsGreen()`… |
+| [`ConfigManager`](D4%20HELPv7.1.ahk#L2017) | INI 配置读写与方案管理 | `SaveProfile()`, `LoadProfile()` |
 
 所有类均为纯静态方法，无实例化开销。
 

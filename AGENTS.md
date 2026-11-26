@@ -42,8 +42,8 @@ D4 HELP 是《暗黑破坏神 IV》的 Windows 按键助手。当前版本保持
 | 改动 | 检查与通过条件 |
 | --- | --- |
 | 文档 | 运行 `git -C "$Repo" diff --check`，另行检查新增文件及本次变更的链接、锚点和命令。 |
-| 主脚本 | 按 [AHK Smoke](.github/workflows/ahk-smoke.yml) 在任务临时目录制作脚本副本，将末尾的 `GUIManager.Initialize()` 替换为 `ExitApp()`，用 AutoHotkey v2.0.31 的 `AutoHotkey64.exe /ErrorStdOut smoke.ahk` 运行，退出码应为 0。 |
-| 队列、按键或 GUI 行为 | 语法冒烟跳过 GUI 初始化。队列和按键变更用隔离探针记录事件顺序，验证停止和释放，全程不发送真实键鼠输入。涉及界面或游戏现场的结果，交付时注明已观察到的行为及待实机核对项。 |
+| 主脚本 | 按 [AHK Smoke](.github/workflows/ahk-smoke.yml) 使用 AutoHotkey v2.0.31 对原脚本运行 `AutoHotkey64.exe /ErrorStdOut=UTF-8 /Validate "D4 HELPv7.1.ahk"`，检查退出码为 0。 |
+| 队列、按键或 GUI 行为 | 在任务独占的临时目录用 [行为测试入口](tests/run.ps1) 运行候选脚本的真实类，以事件记录验证停止、释放和调度，全程不发送真实键鼠输入。配置测试使用隔离 INI。涉及界面或游戏现场的结果，交付时注明已观察到的行为及待实机核对项。 |
 
 ## Git 与交付
 

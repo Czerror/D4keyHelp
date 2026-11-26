@@ -18,19 +18,12 @@ jobs:
           Invoke-WebRequest -Uri "https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.31/AutoHotkey_2.0.31.zip" -OutFile $ahkZip
           Expand-Archive -Path $ahkZip -DestinationPath "$env:RUNNER_TEMP\ahk"
 
-      - name: Create smoke entry (real entry with Initialize replaced)
-        shell: pwsh
-        run: |
-          $entry = Get-Content -Raw -LiteralPath "$env:GITHUB_WORKSPACE\D4 HELPv7.1.ahk"
-          $smoke = $entry -replace 'GUIManager\.Initialize\(\)', 'ExitApp()'
-          Set-Content -LiteralPath "$env:GITHUB_WORKSPACE\smoke.ahk" -Value $smoke -Encoding UTF8
-
       - name: Run AHK syntax smoke
         shell: pwsh
         run: |
           $errLog = "$env:RUNNER_TEMP\ahk_err.txt"
           $p = Start-Process -FilePath "$env:RUNNER_TEMP\ahk\AutoHotkey64.exe" `
-            -ArgumentList '/ErrorStdOut', 'smoke.ahk' `
+            -ArgumentList '/ErrorStdOut=UTF-8 /Validate "D4 HELPv7.1.ahk"' `
             -WorkingDirectory "$env:GITHUB_WORKSPACE" `
             -Wait -PassThru -WindowStyle Hidden `
             -RedirectStandardError $errLog
@@ -38,3 +31,7 @@ jobs:
           if ($p.ExitCode -ne 0) {
             exit $p.ExitCode
           }
+
+      - name: Run isolated behavior tests
+        shell: pwsh
+        run: ./tests/run.ps1 -AhkPath "$env:RUNNER_TEMP\ahk\AutoHotkey64.exe" -ScratchDir "$env:RUNNER_TEMP"

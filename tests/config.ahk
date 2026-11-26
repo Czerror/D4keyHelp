@@ -58,10 +58,10 @@ TestConfig() {
     GUIManager.RunMod.Value := 1
     ConfigManager.SaveProfileFromUI()
     Assert(InStr(GUIManager.statusBar.Text, "已保存"), "保存旧方案应报告成功")
-    Assert(ConfigManager.LoadProfile("测试方案") && GUIManager.RunMod.Value = 1, "单线程模式重载")
+    Assert(ConfigManager.LoadProfile("测试方案") && GUIManager.RunMod.Value = 1, "多线程模式重载")
     GUIManager.RunMod.Value := 2
     ConfigManager.SaveProfileFromUI()
-    Assert(ConfigManager.LoadProfile("测试方案") && GUIManager.RunMod.Value = 2, "多线程模式重载")
+    Assert(ConfigManager.LoadProfile("测试方案") && GUIManager.RunMod.Value = 2, "单线程模式重载")
     Assert(GUIManager.cSkill[1]["interval"].Value = 73 && GUIManager.startkey["userkey"][1].key = "F5", "重载保留受支持的旧字段")
     Assert(IniRead(ConfigManager.settingsFile, "Profiles", "List") = "默认|测试方案|另一个方案", "保存补齐默认方案并保留列表")
     Assert(IniRead(ConfigManager.settingsFile, "另一个方案", "保留") = "中文", "保留其他方案")
