@@ -78,11 +78,7 @@ class GUIManager {
      * 统一退出流程：先停止宏并释放按键，再保存配置并退出
      */
     static ExitApp() {
-        try {
-            MacroController.StopAllTimers()
-        } catch as err {
-            UtilityHelper.ReportError("退出清理失败: " . err.Message)
-        }
+        MacroController.StopMacro()
         ConfigManager.SaveProfileFromUI()
         ExitApp()
     }
@@ -520,19 +516,18 @@ class UtilityHelper {
     }
 
     static MoveMouseFunc := 0 ; 鼠标移动定时器
+    static moveGeneration := 0
 
     /**
      * 启动鼠标自动移动
      */
     static StartMove(){
         this.StopMove()
-        if(this.MoveMouseFunc == 0) {
-            this.MoveMouseFunc := () => this.MoveMouse()
-        }
         interval := Integer(GUIManager.uCtrl["mouseAutoMove"]["interval"].Value)
         if (interval > 0) {
-            UtilityHelper.MoveMouse()
+            this.MoveMouseFunc := ObjBindMethod(this, "MoveMouse", this.moveGeneration)
             SetTimer(this.MoveMouseFunc, interval)
+            this.MoveMouse(this.moveGeneration)
         }
     }
 
@@ -540,6 +535,7 @@ class UtilityHelper {
      * 停止鼠标自动移动
      */
     static StopMove(){
+        this.moveGeneration++
         if (this.MoveMouseFunc != 0) {
             SetTimer(this.MoveMouseFunc, 0)
             this.MoveMouseFunc := 0
@@ -549,7 +545,10 @@ class UtilityHelper {
     /**
      * 鼠标自动移动函数
      */
-    static MoveMouse() {
+    static MoveMouse(generation) {
+        Critical
+        if (generation != this.moveGeneration)
+            return
         allcoords := WindowManager.GetAllCoord()
 
         try {
@@ -627,6 +626,10 @@ class UtilityHelper {
 class MacroController {
     ; 静态属性
     static isRunning := false          ; 宏是否运行中
+    static runGeneration := 0
+    static doubleClickResumeTimer := 0
+    static doubleClickGeneration := 0
+    static lastClickTime := 0
     static pauseConfig := Map(         ; 暂停配置
         "window", {state: false, name: "窗口切换"},
         "blood", {state: false, name: "血条检测"},
@@ -639,21 +642,67 @@ class MacroController {
      * 核心控制函数 - 切换宏的启动/停止状态
      */
     static ToggleMacro(*) {
-        this.isRunning := !this.isRunning
-        
+        ; 启停与定时器回调串行修改运行状态。
+        Critical
         if (this.isRunning) {
-            PauseDetector.ManageTimers(true)
-            this.StartAllTimers()
-            GUIManager.UpdateStatus("已启动", "宏已启动")
-        } else {
-            PauseDetector.ManageTimers(false)
-            this.StopAllTimers()
-            for reason, config in this.pauseConfig {
-                config.state := false
-            }
+            this.StopMacro()
             WindowManager.ResetCache()
             GUIManager.UpdateStatus("已停止", "宏已停止")
+            return
         }
+        this.isRunning := true
+        PauseDetector.ManageTimers(true)
+        if (GUIManager.uCtrl["D4only"]["enable"].Value)
+            PauseDetector.CheckWindow()
+        if (!this.IsPaused()) {
+            this.StartAllTimers()
+            GUIManager.UpdateStatus("已启动", "宏已启动")
+        }
+    }
+
+    static StopMacro(*) {
+        Critical
+        this.isRunning := false
+        this.runGeneration++
+        this.lastClickTime := 0
+        this._CancelDoubleClickResume()
+        PauseDetector.ManageTimers(false)
+        this.StopAllTimers()
+        for , config in this.pauseConfig
+            config.state := false
+    }
+
+    static HandleLeftClick() {
+        Critical
+        if (!this.isRunning || !GUIManager.uCtrl["dcPause"]["enable"].Value)
+            return
+        currentTime := A_TickCount
+        if (this.lastClickTime && currentTime - this.lastClickTime < 400) {
+            this.TogglePause("doubleClick", true)
+            this._CancelDoubleClickResume()
+            confirmTime := Integer(GUIManager.uCtrl["dcPause"]["interval"].Value)
+            this.doubleClickResumeTimer := ObjBindMethod(this, "_ResumeDoubleClick", this.doubleClickGeneration)
+            SetTimer(this.doubleClickResumeTimer, -(confirmTime ? confirmTime : 2) * 1000)
+            this.lastClickTime := 0
+        } else {
+            this.lastClickTime := currentTime
+        }
+    }
+
+    static _CancelDoubleClickResume() {
+        this.doubleClickGeneration++
+        if (this.doubleClickResumeTimer) {
+            SetTimer(this.doubleClickResumeTimer, 0)
+            this.doubleClickResumeTimer := 0
+        }
+    }
+
+    static _ResumeDoubleClick(generation) {
+        Critical
+        if (generation != this.doubleClickGeneration)
+            return
+        this.doubleClickResumeTimer := 0
+        this.TogglePause("doubleClick", false)
     }
     
     /**
@@ -663,6 +712,7 @@ class MacroController {
      * @param {String} reasonName - 原因显示名（可选，覆盖 pauseConfig 中的默认名）
      */
     static TogglePause(reason := "", state := unset, reasonName := "") {
+        Critical
         if (!this.isRunning) {
             return
         }
@@ -733,11 +783,6 @@ class MacroController {
      * 启动所有定时器
      */
     static StartAllTimers() {
-
-        for reason, config in this.pauseConfig {
-            config.state := false
-        }
-        
         if (GUIManager.uCtrl["D4only"]["enable"].Value) {
             WindowManager.GetAllCoord()
             if (GUIManager.uCtrl["mouseAutoMove"]["enable"].Value) {
@@ -784,25 +829,10 @@ class MacroController {
      * 停止所有定时器
      */
     static StopAllTimers() {
-        if (GUIManager.RunMod.Value = 2) {
-            KeyQueueManager.StopQueue()
-        }
+        KeyQueueManager.StopQueue()
         KeyHandler.ClearAllTimers()
-        if (GUIManager.uCtrl["mouseAutoMove"]["enable"].Value) {
-            UtilityHelper.StopMove()
-        }
-        this.ReleaseAllKeys()
-    }
-    
-    /**
-     * 释放所有按键
-     */
-    static ReleaseAllKeys() {
+        UtilityHelper.StopMove()
         KeyHandler.ResetHoldStates()
-
-        if (GUIManager.uCtrl["shift"]["enable"].Value) {
-            Send "{Blind}{Shift up}"
-        }
     }
 }
 
@@ -815,6 +845,7 @@ class MacroController {
 class KeyHandler {
     ; 静态属性 - 存储按键状态
     static holdStates := Map()          ; 按住状态缓存
+    static shiftHeld := false          ; Shift 是否由脚本按下
     static skillTimers := Map()         ; 技能定时器
     static coordCache := Map()          ; 技能坐标缓存
     ; 检测与坐标常量
@@ -871,12 +902,14 @@ class KeyHandler {
      * @param {Boolean} shiftEnabled - 是否启用Shift
      */
     static _ExecuteKey(keyData, shiftEnabled) {
-        if (shiftEnabled) {
-            Send "{Blind}{Shift down}"
+        temporaryShift := shiftEnabled && !this.shiftHeld
+        if (temporaryShift)
+            this._SetShift(true)
+        try {
             this._Press(keyData)
-            Send "{Blind}{Shift up}"
-        } else {
-            this._Press(keyData)
+        } finally {
+            if (temporaryShift)
+                this._SetShift(false)
         }
     }
 
@@ -888,7 +921,7 @@ class KeyHandler {
         if (this.IsMouse(keyData))
             Click(keyData.key)
         else
-            Send("{" keyData.key "}")
+            Send((this.shiftHeld ? "{Blind}" : "") "{" keyData.key "}")
     }
 
     /**
@@ -897,13 +930,19 @@ class KeyHandler {
      * @param {Boolean} shiftEnabled - 是否启用Shift
      */
     static _PressDown(keyData, shiftEnabled) {
-        if (shiftEnabled) {
-            Send "{Blind}{Shift down}"
-        }
+        if (shiftEnabled)
+            this._SetShift(true)
         if (this.IsMouse(keyData))
             Click("down " keyData.key)
         else
-            Send("{" keyData.key " down}")
+            Send((this.shiftHeld ? "{Blind}" : "") "{" keyData.key " down}")
+    }
+
+    static _SetShift(down) {
+        if (down != this.shiftHeld) {
+            this.shiftHeld := down
+            Send(down ? "{Blind}{Shift down}" : "{Blind}{Shift up}")
+        }
     }
 
     /**
@@ -923,7 +962,7 @@ class KeyHandler {
 
         if (this.skillTimers.Has(keyData.uniqueKey)) {
             try {
-                SetTimer(this.skillTimers[keyData.uniqueKey], 0)
+                SetTimer(this.skillTimers[keyData.uniqueKey].callback, 0)
             } catch as err {
                 UtilityHelper.ReportError("停止技能定时器失败: " . keyData.uniqueKey . " - " . err.Message)
             }
@@ -931,16 +970,22 @@ class KeyHandler {
         }
 
         if (GUIManager.RunMod.Value == 1) {
-            ; 先按新随机间隔重新武装一次性定时器，再执行按键，避免执行异常中断后续触发
-            timerFunc := () => (
-                SetTimer(, -this._NextInterval(keyData)),
-                this.HandleKeyMode(keyData)
-            )
-            this.skillTimers[keyData.uniqueKey] := timerFunc
+            timerFunc := ObjBindMethod(this, "_RunTimer", keyData)
+            this.skillTimers[keyData.uniqueKey] := {callback: timerFunc, keyData: keyData}
             SetTimer(timerFunc, -this._NextInterval(keyData))
         } else if (GUIManager.RunMod.Value == 2) {
             KeyQueueManager.EnqueueKey(keyData)
         }
+    }
+
+    static _RunTimer(keyData) {
+        Critical
+        timer := this.skillTimers.Get(keyData.uniqueKey, false)
+        if (!timer || timer.keyData != keyData)
+            return
+        ; 先重新武装，再发键，避免单次动作异常阻断后续调度。
+        SetTimer(, -this._NextInterval(keyData))
+        this.HandleKeyMode(keyData)
     }
 
     /**
@@ -1140,9 +1185,9 @@ class KeyHandler {
      * 清理所有定时器
      */
     static ClearAllTimers() {
-        for timerKey, timerFunc in this.skillTimers {
+        for timerKey, timer in this.skillTimers {
             try {
-                SetTimer(timerFunc, 0)
+                SetTimer(timer.callback, 0)
             } catch as err {
                 UtilityHelper.ReportError("清理定时器失败: " . timerKey . " - " . err.Message)
             }
@@ -1160,13 +1205,14 @@ class KeyHandler {
                     if (state.isMouse)
                         Click("up " state.key)
                     else
-                        Send("{" state.key " up}")
+                        Send("{Blind}{" state.key " up}")
                 } catch {
                     ; 忽略释放错误
                 }
             }
         }
         this.holdStates.Clear()
+        this._SetShift(false)
     }
 
     /**
@@ -1188,6 +1234,7 @@ class KeyQueueManager {
     static expectedNext := Map()        ; 预计下次执行时刻 {uniqueKey: timestamp}
     static isRunning := false           ; 队列运行状态
     static QueueWorkerFunc := 0         ; 工作函数引用
+    static queueGeneration := 0
     static MIN_WAKE_INTERVAL := 1       ; 最小唤醒间隔(ms)
     static MIN_INTERVAL := 5            ; 最短调度间隔(ms)
     static MAX_OVERSHOOT_RATIO := 0.5   ; 最大过冲矫正比例
@@ -1198,9 +1245,7 @@ class KeyQueueManager {
     static StartQueue() {
         this.StopQueue()
         this.isRunning := true
-        if (this.QueueWorkerFunc == 0) {
-            this.QueueWorkerFunc := () => this.ProcessCycle()
-        }
+        this.QueueWorkerFunc := ObjBindMethod(this, "ProcessCycle", this.queueGeneration)
         ; 不固定轮询：由 EnqueueKey / ProcessCycle 按最近执行时刻按需武装一次性定时器
     }
     
@@ -1209,8 +1254,10 @@ class KeyQueueManager {
      */
     static StopQueue() {
         this.isRunning := false
+        this.queueGeneration++
         if (this.QueueWorkerFunc != 0) {
             SetTimer(this.QueueWorkerFunc, 0)
+            this.QueueWorkerFunc := 0
         }
         this.ClearQueue()
     }
@@ -1262,12 +1309,11 @@ class KeyQueueManager {
      * 队列处理器
      * @description 快照收集到期按键，按优先级排序后批量执行，消除原逆序变异导致的索引混乱
      */
-    static ProcessCycle() {
-        if (!this.isRunning) {
-            return
-        }
+    static ProcessCycle(generation := this.queueGeneration) {
         ; 批次执行期间不可被热键/其他线程中断，避免停止后回写队列造成残留
         Critical
+        if (!this.isRunning || generation != this.queueGeneration)
+            return
         try {
             now := this._Now()
             dueEntries := []
@@ -1638,7 +1684,6 @@ class PauseDetector {
                 }
             }
         } else {
-            this.InitializeTimerConfig()
             for timerName, timerConfig in this.CheckTimer {
                 try {
                     SetTimer(timerConfig.func, 0)
@@ -1658,17 +1703,17 @@ class PauseDetector {
             return
         }
         this.CheckTimer["CheckWindow"] := {
-            func: ObjBindMethod(this, "CheckWindow"),
+            func: ObjBindMethod(this, "CheckWindow", MacroController.runGeneration),
             enabled: true,
             interval: 100
         }
         this.CheckTimer["AutoPauseByBlood"] := {
-            func: ObjBindMethod(this, "AutoPauseByBlood"),
+            func: ObjBindMethod(this, "AutoPauseByBlood", MacroController.runGeneration),
             enabled: false,
             interval: 50
         }
         this.CheckTimer["AutoPauseByTAB"] := {
-            func: ObjBindMethod(this, "AutoPauseByTAB"),
+            func: ObjBindMethod(this, "AutoPauseByTAB", MacroController.runGeneration),
             enabled: false,
             interval: 100
         }
@@ -1712,7 +1757,10 @@ class PauseDetector {
     /**
      * 窗口切换检查函数
      */
-    static CheckWindow() {
+    static CheckWindow(generation := MacroController.runGeneration) {
+        Critical
+        if (generation != MacroController.runGeneration)
+            return
         d4only := GUIManager.uCtrl["D4only"]["enable"].Value
         pause := false
         reasonName := "窗口切换"
@@ -1820,7 +1868,10 @@ class PauseDetector {
      * 未命中时短路检测Boss血条。
      * @returns {void}
      */
-    static AutoPauseByBlood() {
+    static AutoPauseByBlood(generation) {
+        Critical
+        if (generation != MacroController.runGeneration)
+            return
         allcoords := WindowManager.GetAllCoord()
         bloodDetected := false
         try {
@@ -1842,7 +1893,10 @@ class PauseDetector {
      * TAB界面和对话框检测暂停逻辑
      * 定时检测界面状态并自动暂停/启动宏
      */
-    static AutoPauseByTAB() {
+    static AutoPauseByTAB(generation) {
+        Critical
+        if (generation != MacroController.runGeneration)
+            return
         allcoords := WindowManager.GetAllCoord()
 
         try {
@@ -1903,10 +1957,10 @@ class ColorDetector {
      * 每次调用执行单次屏幕像素读取，不做缓存。
      * @param {Integer} x - X坐标
      * @param {Integer} y - Y坐标
-     * @returns {Integer} - 0xRRGGBB 格式的整数颜色值
+     * @returns {String} - 可参与位运算的 0xRRGGBB 十六进制数值字符串
      */
     static GetPixelRGB(x, y) {
-        return PixelGetColor(x, y, "RGB")
+        return PixelGetColor(x, y)
     }
     
     ; 蓝色检测
@@ -2335,22 +2389,8 @@ class ConfigManager {
 
 ~LButton::
 {
-    static lastClickTime := 0
-    static doubleClickResumeTimer := ObjBindMethod(MacroController, "TogglePause", "doubleClick", false)
-
-    if (!GUIManager.uCtrl["dcPause"]["enable"].Value)
-        return
-
-    currentTime := A_TickCount
-
-    if (currentTime - lastClickTime < 400) {
-        MacroController.TogglePause("doubleClick", true)
-        confirmTime := Integer(GUIManager.uCtrl["dcPause"]["interval"].Value) || 2
-        SetTimer(doubleClickResumeTimer, -confirmTime * 1000)
-        lastClickTime := 0
-    } else {
-        lastClickTime := currentTime
-    }
+    MacroController.HandleLeftClick()
 }
 
+OnExit(ObjBindMethod(MacroController, "StopMacro"))
 GUIManager.Initialize()
