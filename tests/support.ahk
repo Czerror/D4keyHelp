@@ -4,6 +4,11 @@ global DEBUG := false
 global debugLogFile := A_ScriptDir "\debugd4.log"
 OnError(TestError)
 
+CompleteTest() {
+    FileAppend("D4_TEST_COMPLETE`n", "*", "UTF-8-RAW")
+    ExitApp(0)
+}
+
 TestError(err, *) {
     FileAppend(err.Message " (line " err.Line ")`n", "**", "UTF-8")
     ExitApp(1)

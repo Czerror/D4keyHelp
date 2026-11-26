@@ -79,7 +79,9 @@ class GUIManager {
      */
     static ExitApp() {
         MacroController.StopMacro()
-        ConfigManager.SaveProfileFromUI()
+        if (!ConfigManager.SaveProfileFromUI()
+            && MsgBox("配置保存失败。仍要退出吗？", "D4 HELP", "YesNo Icon! Default2") != "Yes")
+            return
         ExitApp()
     }
     
@@ -921,7 +923,7 @@ class KeyHandler {
         if (this.IsMouse(keyData))
             Click(keyData.key)
         else
-            Send((this.shiftHeld ? "{Blind}" : "") "{" keyData.key "}")
+            Send("{" keyData.key "}")
     }
 
     /**
@@ -935,7 +937,7 @@ class KeyHandler {
         if (this.IsMouse(keyData))
             Click("down " keyData.key)
         else
-            Send((this.shiftHeld ? "{Blind}" : "") "{" keyData.key " down}")
+            Send("{" keyData.key " down}")
     }
 
     static _SetShift(down) {
@@ -1205,7 +1207,7 @@ class KeyHandler {
                     if (state.isMouse)
                         Click("up " state.key)
                     else
-                        Send("{Blind}{" state.key " up}")
+                        Send("{" state.key " up}")
                 } catch {
                     ; 忽略释放错误
                 }

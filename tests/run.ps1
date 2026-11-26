@@ -25,7 +25,7 @@ foreach ($test in $TestFile) {
     $out = Join-Path $work 'stdout.txt'
     $err = Join-Path $work 'stderr.txt'
     $body = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $path))
-    [System.IO.File]::WriteAllText($probe, "$support`n$classes`n$exitHooks`n$body`nExitApp(0)`n", $utf8)
+    [System.IO.File]::WriteAllText($probe, "$support`n$classes`n$exitHooks`n$body`nCompleteTest()`n", $utf8)
     $arguments = '/ErrorStdOut=UTF-8 /CP65001 "' + $probe + '"'
     $process = Start-Process -FilePath $exe -ArgumentList $arguments -WorkingDirectory $work `
         -WindowStyle Hidden -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
@@ -36,9 +36,8 @@ foreach ($test in $TestFile) {
     }
     $output = [System.IO.File]::ReadAllText($out, $utf8)
     $errors = [System.IO.File]::ReadAllText($err, $utf8)
-    if ($output) { Write-Output $output.TrimEnd() }
-    if ($process.ExitCode -ne 0 -or $errors) {
-        throw "$name failed (exit $($process.ExitCode), $work) $errors"
+    if ($process.ExitCode -ne 0 -or $errors -or $output.TrimEnd() -notmatch '(?m)^D4_TEST_COMPLETE$') {
+        throw "$name did not finish cleanly (exit $($process.ExitCode), $work) $errors $output"
     }
     Write-Output "PASS $name"
 }

@@ -90,8 +90,7 @@ TestLifecycle() {
         GUIManager.uCtrl["mouseAutoMove"]["enable"].Value := true
         MacroController.ToggleMacro()
         if (mode == 1) {
-            registration := KeyHandler.skillTimers["skill:1"]
-            oldAction := registration.HasOwnProp("callback") ? registration.callback : registration
+            oldAction := KeyHandler.skillTimers["skill:1"].callback
         } else {
             oldAction := KeyQueueManager.QueueWorkerFunc
         }
@@ -100,9 +99,9 @@ TestLifecycle() {
         WaitLifecycle(100)
         CheckLifecycle(CountLifecycle("{Blind}{Shift down}") == 1
             && CountLifecycle("{Blind}{Shift up}") == 0
-            && CountLifecycle("{Blind}{1 down}") == 1
+            && CountLifecycle("{1 down}") == 1
             && CountLifecycle("down left") == 1 && CountLifecycle("right") > 0
-            && IndexLifecycle("{Blind}{Shift down}") < IndexLifecycle("{Blind}{1 down}")
+            && IndexLifecycle("{Blind}{Shift down}") < IndexLifecycle("{1 down}")
             && IndexLifecycle("{Blind}{Shift down}") < IndexLifecycle("down left"),
             "mode " mode ": repeated click keeps the Shift owned by held actions", failures)
         GUIManager.cSkill[1]["key"].Value := "2"
@@ -110,9 +109,9 @@ TestLifecycle() {
         GUIManager.uCtrl["mouseAutoMove"]["enable"].Value := false
         GUIManager.RunMod.Value := 3 - mode
         MacroController.TogglePause("tab", true)
-        CheckLifecycle(CountLifecycle("{Blind}{1 up}") == 1
+        CheckLifecycle(CountLifecycle("{1 up}") == 1
             && CountLifecycle("up left") == 1 && CountLifecycle("{Blind}{Shift up}") == 1
-            && IndexLifecycle("{Blind}{1 up}") < IndexLifecycle("{Blind}{Shift up}")
+            && IndexLifecycle("{1 up}") < IndexLifecycle("{Blind}{Shift up}")
             && IndexLifecycle("up left") < IndexLifecycle("{Blind}{Shift up}"),
             "mode " mode ": pause releases held inputs after config changes", failures)
         TestIO.events.Length := 0
@@ -120,11 +119,6 @@ TestLifecycle() {
         CheckLifecycle(TestIO.events.Length == 0,
             "mode " mode ": pause cancels old movement and key timers", failures)
         MacroController.ToggleMacro()
-        if (!MacroController.HasMethod("HandleLeftClick")) {
-            KeyQueueManager.StopQueue()
-            UtilityHelper.StopMove()
-            continue
-        }
         oldAction()
         oldMove()
         CheckLifecycle(TestIO.events.Length == 0,
@@ -157,7 +151,7 @@ TestLifecycle() {
 }
 
 AssertLifecycleExit(*) {
-    if (CountLifecycle("{Blind}{1 up}") != 1
+    if (CountLifecycle("{1 up}") != 1
         || CountLifecycle("up left") != 1 || CountLifecycle("{Blind}{Shift up}") != 1)
         FileAppend("OnExit did not release held inputs`n", "**")
 }
@@ -169,6 +163,6 @@ GUIManager.mSkill["left"]["enable"].Value := true
 GUIManager.uCtrl["shift"]["enable"].Value := true
 MacroController.ToggleMacro()
 WaitLifecycle(80)
-Assert(CountLifecycle("{Blind}{1 down}") == 1 && CountLifecycle("down left") == 1,
+Assert(CountLifecycle("{1 down}") == 1 && CountLifecycle("down left") == 1,
     "held inputs established before ExitApp")
 OnExit(AssertLifecycleExit)

@@ -123,3 +123,20 @@ FailConfigMetadata(write, failureSection, self, section, key, value) {
 }
 
 TestConfig()
+
+; A failed save should be visible when closing the GUI as well as when clicking Save.
+MsgBox(text, title, options) {
+    global configExitWarnings
+    configExitWarnings += 1
+    Assert(InStr(text, "保存失败") && InStr(options, "YesNo"), "退出前可选择保留界面或继续退出")
+    return "No"
+}
+
+global configExitWarnings := 0
+FileSetAttrib("+R", ConfigManager.settingsFile)
+try {
+    GUIManager.ExitApp()
+} finally {
+    FileSetAttrib("-R", ConfigManager.settingsFile)
+}
+Assert(configExitWarnings == 1, "关闭时显示一次保存失败提示，选择保留后可继续操作")

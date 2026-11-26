@@ -294,16 +294,16 @@ v7.1 采用 11 个静态类组成的模块化架构：
 | 类名 | 职责 | 关键方法 |
 |------|------|----------|
 | [`GUIManager`](D4%20HELPv7.1.ahk#L14) | GUI 创建与状态管理 | `Initialize()`, `UpdateStatus()` |
-| [`HotkeyManager`](D4%20HELPv7.1.ahk#L353) | 全局热键注册/更新 | `LoadStartHotkey()`, `UpdateHotkeyText()` |
-| [`UtilityHelper`](D4%20HELPv7.1.ahk#L448) | 通用工具函数 | `RandomDelay()`, `DebugLog()`, `LimitEditValue()` |
-| [`MacroController`](D4%20HELPv7.1.ahk#L626) | 宏生命周期与暂停协调 | `ToggleMacro()`, `TogglePause()` |
-| [`KeyHandler`](D4%20HELPv7.1.ahk#L845) | 按键执行与模式分发 | `HandleKeyMode()`, `PressKeyCallback()` |
-| [`KeyQueueManager`](D4%20HELPv7.1.ahk#L1232) | 单线程优先级队列 | `EnqueueKey()`, `ProcessCycle()` |
-| [`WindowManager`](D4%20HELPv7.1.ahk#L1443) | 窗口检测与坐标转换 | `GetWindowInfo()`, `ConvertCoord()` |
-| [`HysteresisTracker`](D4%20HELPv7.1.ahk#L1608) | 迟滞阈值计数去抖 | `Update()`, `Reset()` |
-| [`PauseDetector`](D4%20HELPv7.1.ahk#L1663) | 暂停条件检测 | `AutoPauseByBlood()`, `AutoPauseByTAB()` |
-| [`ColorDetector`](D4%20HELPv7.1.ahk#L1934) | 像素取色与颜色判断 | `GetPixelRGB()`, `IsRed()`, `IsGreen()`… |
-| [`ConfigManager`](D4%20HELPv7.1.ahk#L2017) | INI 配置读写与方案管理 | `SaveProfile()`, `LoadProfile()` |
+| [`HotkeyManager`](D4%20HELPv7.1.ahk#L355) | 全局热键注册/更新 | `LoadStartHotkey()`, `UpdateHotkeyText()` |
+| [`UtilityHelper`](D4%20HELPv7.1.ahk#L450) | 通用工具函数 | `RandomDelay()`, `DebugLog()`, `LimitEditValue()` |
+| [`MacroController`](D4%20HELPv7.1.ahk#L628) | 宏生命周期与暂停协调 | `ToggleMacro()`, `TogglePause()` |
+| [`KeyHandler`](D4%20HELPv7.1.ahk#L847) | 按键执行与模式分发 | `HandleKeyMode()`, `PressKeyCallback()` |
+| [`KeyQueueManager`](D4%20HELPv7.1.ahk#L1234) | 单线程优先级队列 | `EnqueueKey()`, `ProcessCycle()` |
+| [`WindowManager`](D4%20HELPv7.1.ahk#L1445) | 窗口检测与坐标转换 | `GetWindowInfo()`, `ConvertCoord()` |
+| [`HysteresisTracker`](D4%20HELPv7.1.ahk#L1610) | 迟滞阈值计数去抖 | `Update()`, `Reset()` |
+| [`PauseDetector`](D4%20HELPv7.1.ahk#L1665) | 暂停条件检测 | `AutoPauseByBlood()`, `AutoPauseByTAB()` |
+| [`ColorDetector`](D4%20HELPv7.1.ahk#L1936) | 像素取色与颜色判断 | `GetPixelRGB()`, `IsRed()`, `IsGreen()`… |
+| [`ConfigManager`](D4%20HELPv7.1.ahk#L2019) | INI 配置读写与方案管理 | `SaveProfile()`, `LoadProfile()` |
 
 所有类均为纯静态方法，无实例化开销。
 
