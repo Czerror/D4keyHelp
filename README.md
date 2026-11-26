@@ -1,4 +1,4 @@
-# D4 HELP v7.1
+# D4 HELP v7.1.5
 
 > 暗黑破坏神4 游戏辅助工具 · 基于 AutoHotkey v2.0.31 构建
 
@@ -305,4 +305,4 @@ TAB 界面 ──┼──→ MacroController.TogglePause() ──→ 暂停/恢
 
 ---
 
-*D4 HELP v7.1 · by Archenemy · [GitHub](https://github.com/Czerror/D4keyHelp)*
+*D4 HELP v7.1.5 · by Archenemy · [GitHub](https://github.com/Czerror/D4keyHelp)*

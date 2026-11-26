@@ -30,7 +30,7 @@ class GUIManager {
      * 创建主窗口、托盘菜单和所有控件
      */
     static Initialize() {
-        this.myGui := Gui("", "D4 HELP v7.1 by Archenemy")
+        this.myGui := Gui("", "D4 HELP v7.1.5 by Archenemy")
         this.myGui.BackColor := "FFFFFF"
         this.myGui.SetFont("s10", "Microsoft YaHei UI")
         this.InitializeTrayMenu()
